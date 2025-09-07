@@ -1,4 +1,4 @@
-package com.android.nextbus.ui.maps
+package com.android.nextbus.ui.theme
 
 import com.google.android.gms.maps.model.MapStyleOptions
 
@@ -10,15 +10,7 @@ object MapStyles {
             "elementType": "geometry",
             "stylers": [
               {
-                "color": "#212121"
-              }
-            ]
-          },
-          {
-            "elementType": "labels.icon",
-            "stylers": [
-              {
-                "visibility": "off"
+                "color": "#1a1a1a"
               }
             ]
           },
@@ -26,7 +18,7 @@ object MapStyles {
             "elementType": "labels.text.fill",
             "stylers": [
               {
-                "color": "#757575"
+                "color": "#ffffff"
               }
             ]
           },
@@ -34,16 +26,16 @@ object MapStyles {
             "elementType": "labels.text.stroke",
             "stylers": [
               {
-                "color": "#212121"
+                "color": "#1a1a1a"
               }
             ]
           },
           {
             "featureType": "administrative",
-            "elementType": "geometry",
+            "elementType": "geometry.stroke",
             "stylers": [
               {
-                "color": "#757575"
+                "color": "#4a4a4a"
               }
             ]
           },
@@ -52,15 +44,7 @@ object MapStyles {
             "elementType": "labels.text.fill",
             "stylers": [
               {
-                "color": "#9e9e9e"
-              }
-            ]
-          },
-          {
-            "featureType": "administrative.land_parcel",
-            "stylers": [
-              {
-                "visibility": "off"
+                "color": "#ffffff"
               }
             ]
           },
@@ -69,7 +53,34 @@ object MapStyles {
             "elementType": "labels.text.fill",
             "stylers": [
               {
-                "color": "#bdbdbd"
+                "color": "#ffffff"
+              }
+            ]
+          },
+          {
+            "featureType": "administrative.neighborhood",
+            "elementType": "labels.text.fill",
+            "stylers": [
+              {
+                "color": "#cccccc"
+              }
+            ]
+          },
+          {
+            "featureType": "landscape",
+            "elementType": "geometry",
+            "stylers": [
+              {
+                "color": "#2a2a2a"
+              }
+            ]
+          },
+          {
+            "featureType": "poi",
+            "elementType": "geometry",
+            "stylers": [
+              {
+                "color": "#333333"
               }
             ]
           },
@@ -78,7 +89,34 @@ object MapStyles {
             "elementType": "labels.text.fill",
             "stylers": [
               {
-                "color": "#757575"
+                "color": "#cccccc"
+              }
+            ]
+          },
+          {
+            "featureType": "poi.business",
+            "elementType": "geometry",
+            "stylers": [
+              {
+                "color": "#3a3a3a"
+              }
+            ]
+          },
+          {
+            "featureType": "poi.government",
+            "elementType": "geometry",
+            "stylers": [
+              {
+                "color": "#4a4a4a"
+              }
+            ]
+          },
+          {
+            "featureType": "poi.medical",
+            "elementType": "geometry",
+            "stylers": [
+              {
+                "color": "#4a2a2a"
               }
             ]
           },
@@ -87,7 +125,7 @@ object MapStyles {
             "elementType": "geometry",
             "stylers": [
               {
-                "color": "#181818"
+                "color": "#2a4a2a"
               }
             ]
           },
@@ -96,25 +134,34 @@ object MapStyles {
             "elementType": "labels.text.fill",
             "stylers": [
               {
-                "color": "#616161"
+                "color": "#88cc88"
               }
             ]
           },
           {
-            "featureType": "poi.park",
-            "elementType": "labels.text.stroke",
+            "featureType": "poi.school",
+            "elementType": "geometry",
             "stylers": [
               {
-                "color": "#1b1b1b"
+                "color": "#4a4a2a"
+              }
+            ]
+          },
+          {
+            "featureType": "poi.sports_complex",
+            "elementType": "geometry",
+            "stylers": [
+              {
+                "color": "#2a4a4a"
               }
             ]
           },
           {
             "featureType": "road",
-            "elementType": "geometry.fill",
+            "elementType": "geometry",
             "stylers": [
               {
-                "color": "#2c2c2c"
+                "color": "#4a4a4a"
               }
             ]
           },
@@ -123,7 +170,7 @@ object MapStyles {
             "elementType": "labels.text.fill",
             "stylers": [
               {
-                "color": "#8a8a8a"
+                "color": "#ffffff"
               }
             ]
           },
@@ -132,7 +179,7 @@ object MapStyles {
             "elementType": "geometry",
             "stylers": [
               {
-                "color": "#373737"
+                "color": "#5a5a5a"
               }
             ]
           },
@@ -141,16 +188,25 @@ object MapStyles {
             "elementType": "geometry",
             "stylers": [
               {
-                "color": "#3c3c3c"
+                "color": "#6a6a6a"
               }
             ]
           },
           {
-            "featureType": "road.highway.controlled_access",
+            "featureType": "road.highway",
+            "elementType": "labels.text.fill",
+            "stylers": [
+              {
+                "color": "#ffffff"
+              }
+            ]
+          },
+          {
+            "featureType": "road.local",
             "elementType": "geometry",
             "stylers": [
               {
-                "color": "#4e4e4e"
+                "color": "#3a3a3a"
               }
             ]
           },
@@ -159,7 +215,16 @@ object MapStyles {
             "elementType": "labels.text.fill",
             "stylers": [
               {
-                "color": "#616161"
+                "color": "#cccccc"
+              }
+            ]
+          },
+          {
+            "featureType": "transit",
+            "elementType": "geometry",
+            "stylers": [
+              {
+                "color": "#4a4a6a"
               }
             ]
           },
@@ -168,7 +233,34 @@ object MapStyles {
             "elementType": "labels.text.fill",
             "stylers": [
               {
-                "color": "#757575"
+                "color": "#aaaaff"
+              }
+            ]
+          },
+          {
+            "featureType": "transit.line",
+            "elementType": "geometry",
+            "stylers": [
+              {
+                "color": "#6a6aaa"
+              }
+            ]
+          },
+          {
+            "featureType": "transit.station",
+            "elementType": "geometry",
+            "stylers": [
+              {
+                "color": "#5a5a8a"
+              }
+            ]
+          },
+          {
+            "featureType": "transit.station",
+            "elementType": "labels.text.fill",
+            "stylers": [
+              {
+                "color": "#ccccff"
               }
             ]
           },
@@ -177,7 +269,7 @@ object MapStyles {
             "elementType": "geometry",
             "stylers": [
               {
-                "color": "#000000"
+                "color": "#1a2a3a"
               }
             ]
           },
@@ -186,7 +278,7 @@ object MapStyles {
             "elementType": "labels.text.fill",
             "stylers": [
               {
-                "color": "#3d3d3d"
+                "color": "#6699cc"
               }
             ]
           }

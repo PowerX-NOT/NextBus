@@ -103,7 +103,7 @@ fun GoogleMapScreen() {
             cameraPositionState = cameraPositionState,
             properties = MapProperties(
                 isMyLocationEnabled = locationPermissionState.status.isGranted,
-                mapStyleOptions = MapStyles.darkMapStyle
+                mapStyleOptions = com.android.nextbus.ui.theme.MapStyles.darkMapStyle
             ),
             uiSettings = MapUiSettings(
                 zoomControlsEnabled = false,

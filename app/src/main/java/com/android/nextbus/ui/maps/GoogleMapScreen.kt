@@ -179,19 +179,13 @@ fun GoogleMapScreen() {
         }
         
         // Bottom search interface
-        Column(
+        SearchCard(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .padding(16.dp)
-        ) {
-            // Search card
-            SearchCard(
-                modifier = Modifier.fillMaxWidth(),
-                onSearchClick = { /* Handle search click */ },
-                onFavoritesClick = { /* Handle favorites click */ }
-            )
-        }
+                .fillMaxWidth(),
+            onSearchClick = { /* Handle search click */ },
+            onFavoritesClick = { /* Handle favorites click */ }
+        )
     }
     
     // Request location permission on first launch

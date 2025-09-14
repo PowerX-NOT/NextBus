@@ -83,10 +83,15 @@ fun GoogleMapScreen() {
             userLocation = location
             isLocationLoading = false
             
-            // Update camera position to user location
+            // Update camera position to user location with offset for search card
             location?.let {
+                // Calculate offset to center location in visible area (same as recenter button)
+                val offsetLat = it.latitude - 0.015 // Move up to account for large bottom padding
+                val offsetLng = it.longitude + 0.008 // Move left to account for right padding
+                val adjustedLocation = LatLng(offsetLat, offsetLng)
+                
                 cameraPositionState.animate(
-                    CameraUpdateFactory.newLatLngZoom(it, 15f),
+                    CameraUpdateFactory.newLatLngZoom(adjustedLocation, 15f),
                     1000
                 )
             }

@@ -16,6 +16,17 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        
+        // Load API key from .env file
+        val envFile = rootProject.file(".env")
+        if (envFile.exists()) {
+            val envContent = envFile.readText()
+            val apiKey = envContent.lines()
+                .find { it.startsWith("GOOGLE_API_KEY=") }
+                ?.substringAfter("=") ?: ""
+            buildConfigField("String", "GOOGLE_API_KEY", "\"$apiKey\"")
+            manifestPlaceholders["googleMapsApiKey"] = apiKey
+        }
     }
 
     buildTypes {
@@ -36,6 +47,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
     composeOptions {
         kotlinCompilerExtensionVersion = "1.5.14"
@@ -63,6 +75,9 @@ dependencies {
     implementation(libs.maps.compose)
     implementation(libs.play.services.maps)
     implementation(libs.play.services.location)
+    
+    // Google Places
+    implementation(libs.places)
     
     // Permissions
     implementation(libs.accompanist.permissions)

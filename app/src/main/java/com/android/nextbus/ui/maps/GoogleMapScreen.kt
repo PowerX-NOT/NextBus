@@ -91,7 +91,14 @@ fun GoogleMapScreen() {
                 val adjustedLocation = LatLng(offsetLat, offsetLng)
                 
                 cameraPositionState.animate(
-                    CameraUpdateFactory.newLatLngZoom(adjustedLocation, 15f),
+                    CameraUpdateFactory.newCameraPosition(
+                        CameraPosition.Builder()
+                            .target(adjustedLocation)
+                            .zoom(15f)
+                            .bearing(0f) // Reset compass to north
+                            .tilt(0f)    // Reset tilt to flat
+                            .build()
+                    ),
                     1000
                 )
             }
@@ -159,7 +166,14 @@ fun GoogleMapScreen() {
                             val adjustedLocation = LatLng(offsetLat, offsetLng)
                             
                             cameraPositionState.animate(
-                                CameraUpdateFactory.newLatLngZoom(adjustedLocation, 15f),
+                                CameraUpdateFactory.newCameraPosition(
+                                    CameraPosition.Builder()
+                                        .target(adjustedLocation)
+                                        .zoom(15f)
+                                        .bearing(0f) // Reset compass to north
+                                        .tilt(0f)    // Reset tilt to flat
+                                        .build()
+                                ),
                                 1000
                             )
                         }

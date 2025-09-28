@@ -48,6 +48,43 @@ import com.android.nextbus.data.model.BusStop
 import androidx.compose.foundation.border
 import androidx.compose.ui.graphics.toArgb
 
+// Function to decode polyline points from Google Directions API
+fun decodePolyline(encoded: String): List<LatLng> {
+    val poly = mutableListOf<LatLng>()
+    var index = 0
+    val len = encoded.length
+    var lat = 0
+    var lng = 0
+
+    while (index < len) {
+        var b: Int
+        var shift = 0
+        var result = 0
+        do {
+            b = encoded[index++].code - 63
+            result = result or (b and 0x1f shl shift)
+            shift += 5
+        } while (b >= 0x20)
+        val dlat = if (result and 1 != 0) (result shr 1).inv() else result shr 1
+        lat += dlat
+
+        shift = 0
+        result = 0
+        do {
+            b = encoded[index++].code - 63
+            result = result or (b and 0x1f shl shift)
+            shift += 5
+        } while (b >= 0x20)
+        val dlng = if (result and 1 != 0) (result shr 1).inv() else result shr 1
+        lng += dlng
+
+        val p = LatLng(lat.toDouble() / 1E5, lng.toDouble() / 1E5)
+        poly.add(p)
+    }
+
+    return poly
+}
+
 // Function to create custom bus stop marker icon
 fun createBusStopMarkerIcon(context: Context): com.google.android.gms.maps.model.BitmapDescriptor {
     val drawable = ContextCompat.getDrawable(context, R.drawable.bus_stop_icon)
@@ -95,7 +132,17 @@ fun GoogleMapScreen() {
     val isLoadingBusStops by mapViewModel.isLoading.collectAsState()
     val isSearching by mapViewModel.isSearching.collectAsState()
     val showBusStops by mapViewModel.showBusStops.collectAsState()
-    val error by mapViewModel.error.collectAsState()
+    // val error by mapViewModel.error.collectAsState() // Temporarily commented out
+    val directionsResponse by mapViewModel.directionsResponse.collectAsState()
+    val isLoadingDirections by mapViewModel.isLoadingDirections.collectAsState()
+    
+    // Debug logging for directions response
+    LaunchedEffect(directionsResponse) {
+        android.util.Log.d("GoogleMapScreen", "Directions response updated: ${directionsResponse != null}")
+        directionsResponse?.let { response ->
+            android.util.Log.d("GoogleMapScreen", "Routes count: ${response.routes.size}")
+        }
+    }
     
     // Location permission
     val locationPermissionState = rememberPermissionState(
@@ -197,6 +244,23 @@ fun GoogleMapScreen() {
                     }
                 )
             }
+            
+            // Display walking directions polyline
+            directionsResponse?.routes?.firstOrNull()?.let { route ->
+                val points = decodePolyline(route.overview_polyline.points)
+                android.util.Log.d("GoogleMapScreen", "Rendering polyline with ${points.size} points")
+                if (points.isNotEmpty()) {
+                    Polyline(
+                        points = points,
+                        color = androidx.compose.ui.graphics.Color.Blue,
+                        width = 10f,
+                        pattern = listOf(
+                            com.google.android.gms.maps.model.Dash(15f),
+                            com.google.android.gms.maps.model.Gap(18f)
+                        )
+                    )
+                }
+            }
         }
         
         // Top controls
@@ -289,6 +353,9 @@ fun GoogleMapScreen() {
             onExpandedChange = { expanded ->
                 isSearchCardExpanded = expanded
             },
+            onGetDirections = { origin, destination ->
+                mapViewModel.getWalkingDirections(origin, destination)
+            },
             onBusStopSelected = { busStop ->
                 selectedBusStop = busStop
                 isSearchCardMinimized = false // Reset minimize state when new bus stop is selected
@@ -308,40 +375,6 @@ fun GoogleMapScreen() {
                 }
             }
         )
-        
-        
-        // Show error message if any
-        error?.let { errorMessage ->
-            Card(
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .padding(16.dp)
-                    .padding(top = 80.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.errorContainer
-                )
-            ) {
-                Row(
-                    modifier = Modifier.padding(12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = errorMessage,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onErrorContainer,
-                        modifier = Modifier.weight(1f)
-                    )
-                    TextButton(
-                        onClick = { mapViewModel.clearError() }
-                    ) {
-                        Text(
-                            text = "Dismiss",
-                            color = MaterialTheme.colorScheme.onErrorContainer
-                        )
-                    }
-                }
-            }
-        }
     }
     
     // Request location permission on first launch

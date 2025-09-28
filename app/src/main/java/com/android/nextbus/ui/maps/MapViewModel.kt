@@ -5,6 +5,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.android.nextbus.data.model.BusStop
 import com.android.nextbus.data.repository.BusStopRepository
+import com.android.nextbus.data.repository.DirectionsRepository
+import com.android.nextbus.data.network.DirectionsResponse
 import com.google.android.gms.maps.model.LatLng
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -17,26 +19,32 @@ class MapViewModel(context: Context) : ViewModel() {
     }
     
     private val repository = BusStopRepository(context)
+    private val directionsRepository = DirectionsRepository(context)
     
     // Expose repository states
     val busStops: StateFlow<List<BusStop>> = repository.busStops
     val isLoading: StateFlow<Boolean> = repository.isLoading
-    val error: StateFlow<String?> = repository.error
     
     // UI state for search button
     private val _isSearching = MutableStateFlow(false)
     val isSearching: StateFlow<Boolean> = _isSearching.asStateFlow()
     
-    // UI state for showing/hiding markers
+    // UI state for showing bus stops
     private val _showBusStops = MutableStateFlow(false)
     val showBusStops: StateFlow<Boolean> = _showBusStops.asStateFlow()
+    
+    // Directions state
+    private val _directionsResponse = MutableStateFlow<DirectionsResponse?>(null)
+    val directionsResponse: StateFlow<DirectionsResponse?> = _directionsResponse.asStateFlow()
+    
+    private val _isLoadingDirections = MutableStateFlow(false)
+    val isLoadingDirections: StateFlow<Boolean> = _isLoadingDirections.asStateFlow()
     
     // Last search location to avoid duplicate searches
     private var lastSearchLocation: LatLng? = null
     
     /**
      * Search for nearby bus stops at the given location
-     * This mimics the exact button click functionality from bushop app
      */
     fun searchNearbyBusStops(location: LatLng) {
         // Check if we already searched at this location recently
@@ -144,54 +152,52 @@ class MapViewModel(context: Context) : ViewModel() {
     }
     
     /**
+     * Get walking directions from origin to destination
+     */
+    fun getWalkingDirections(origin: LatLng, destination: LatLng) {
+        viewModelScope.launch {
+            _isLoadingDirections.value = true
+            try {
+                Log.d(TAG, "Getting walking directions from $origin to $destination")
+                
+                val result = directionsRepository.getWalkingDirections(origin, destination)
+                
+                result.onSuccess { directionsResponse ->
+                    Log.d(TAG, "Successfully got directions with ${directionsResponse.routes.size} routes")
+                    _directionsResponse.value = directionsResponse
+                }.onFailure { exception ->
+                    Log.e(TAG, "Failed to get directions", exception)
+                    _directionsResponse.value = null
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error getting directions", e)
+                _directionsResponse.value = null
+            } finally {
+                _isLoadingDirections.value = false
+            }
+        }
+    }
+    
+    /**
+     * Clear current directions
+     */
+    fun clearDirections() {
+        _directionsResponse.value = null
+    }
+    
+    /**
      * Check if two locations are approximately the same (within ~100m)
      */
-    private fun isSameLocation(location1: LatLng, location2: LatLng?): Boolean {
-        if (location2 == null) return false
+    private fun isSameLocation(loc1: LatLng, loc2: LatLng?): Boolean {
+        if (loc2 == null) return false
         
         val distance = FloatArray(1)
         android.location.Location.distanceBetween(
-            location1.latitude, location1.longitude,
-            location2.latitude, location2.longitude,
+            loc1.latitude, loc1.longitude,
+            loc2.latitude, loc2.longitude,
             distance
         )
         
-        return distance[0] < 100 // Within 100 meters
-    }
-    
-    /**
-     * Get current bus stops count
-     */
-    fun getBusStopsCount(): Int {
-        return busStops.value.size
-    }
-    
-    /**
-     * Check if there are any bus stops to show
-     */
-    fun hasBusStops(): Boolean {
-        return busStops.value.isNotEmpty()
-    }
-    
-    /**
-     * Get a specific bus stop by ID
-     */
-    fun getBusStopById(id: String): BusStop? {
-        return busStops.value.find { it.id == id }
-    }
-    
-    /**
-     * Get bus stops within a certain distance from a location
-     */
-    fun getBusStopsNear(location: LatLng, radiusMeters: Float = 500f): List<BusStop> {
-        return busStops.value.filter { busStop ->
-            val distance = FloatArray(1)
-            android.location.Location.distanceBetween(
-                location.latitude, location.longitude,
-                busStop.location.latitude, busStop.location.longitude,
-                distance
-            )
-            distance[0] <= radiusMeters
-        }
+        return distance[0] < 100f // Within 100 meters
     }
 }

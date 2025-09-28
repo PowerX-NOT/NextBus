@@ -1,6 +1,8 @@
 package com.android.nextbus.ui.components
 
 import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import android.widget.ArrayAdapter
 import android.widget.AutoCompleteTextView
 import androidx.compose.animation.core.animateFloatAsState
@@ -66,7 +68,8 @@ fun SearchCard(
     selectedBusStop: BusStop? = null,
     isMinimized: Boolean = false,
     onMinimizeToggle: () -> Unit = {},
-    onExpandedChange: (Boolean) -> Unit = {}
+    onExpandedChange: (Boolean) -> Unit = {},
+    onGetDirections: (LatLng, LatLng) -> Unit = { _, _ -> }
 ) {
     var isExpanded by remember { mutableStateOf(false) }
     var dragOffset by remember { mutableStateOf(0f) }
@@ -354,6 +357,7 @@ fun SearchCard(
                     BusStopDetailsView(
                         busStop = selectedBusStop,
                         userLocation = userLocation,
+                        onGetDirections = onGetDirections,
                         onBackClick = {
                             showingBusStopDetails = false
                             showingBusStops = true
@@ -773,7 +777,7 @@ private fun searchPlaces(
  */
 private fun calculateDistance(from: LatLng, to: LatLng): Float {
     val results = FloatArray(1)
-    Location.distanceBetween(
+    android.location.Location.distanceBetween(
         from.latitude, from.longitude,
         to.latitude, to.longitude,
         results
@@ -781,10 +785,28 @@ private fun calculateDistance(from: LatLng, to: LatLng): Float {
     return results[0]
 }
 
+// Function to open Google Maps directions
+private fun openDirections(context: android.content.Context, latitude: Double, longitude: Double) {
+    val uri = Uri.parse("google.navigation:q=$latitude,$longitude&mode=w") // w = walking
+    val intent = Intent(Intent.ACTION_VIEW, uri)
+    intent.setPackage("com.google.android.apps.maps")
+    
+    // Check if Google Maps is installed
+    if (intent.resolveActivity(context.packageManager) != null) {
+        context.startActivity(intent)
+    } else {
+        // Fallback to web version if Google Maps app is not installed
+        val webUri = Uri.parse("https://www.google.com/maps/dir/?api=1&destination=$latitude,$longitude&travelmode=walking")
+        val webIntent = Intent(Intent.ACTION_VIEW, webUri)
+        context.startActivity(webIntent)
+    }
+}
+
 @Composable
 private fun BusStopDetailsView(
     busStop: BusStop,
     userLocation: LatLng?,
+    onGetDirections: (LatLng, LatLng) -> Unit,
     onBackClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -949,6 +971,34 @@ private fun BusStopDetailsView(
         }
         
         Spacer(modifier = Modifier.height(16.dp))
+        
+        // Directions button
+        Button(
+            onClick = {
+                userLocation?.let { origin ->
+                    onGetDirections(origin, busStop.location)
+                }
+            },
+            modifier = Modifier.fillMaxWidth(),
+            enabled = userLocation != null, // Only enable if user location is available
+            colors = ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.primary
+            )
+        ) {
+            Icon(
+                imageVector = Icons.Default.LocationOn,
+                contentDescription = "Get Directions",
+                modifier = Modifier.size(20.dp)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = "Get Walking Directions",
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Medium
+            )
+        }
+        
+        Spacer(modifier = Modifier.height(12.dp))
         
         // Action text
         Text(

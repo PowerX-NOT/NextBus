@@ -41,10 +41,27 @@ import com.google.android.gms.maps.model.LatLng
 import com.google.android.gms.maps.model.MapStyleOptions
 import com.google.android.gms.maps.model.BitmapDescriptorFactory
 import com.google.maps.android.compose.*
+import androidx.core.content.ContextCompat
+import com.android.nextbus.R
 import com.android.nextbus.ui.components.SearchCard
 import com.android.nextbus.data.model.BusStop
 import androidx.compose.foundation.border
 import androidx.compose.ui.graphics.toArgb
+
+// Function to create custom bus stop marker icon
+fun createBusStopMarkerIcon(context: Context): com.google.android.gms.maps.model.BitmapDescriptor {
+    val drawable = ContextCompat.getDrawable(context, R.drawable.bus_stop_icon)
+    return drawable?.let {
+        BitmapDescriptorFactory.fromBitmap(
+            android.graphics.Bitmap.createScaledBitmap(
+                (it as android.graphics.drawable.BitmapDrawable).bitmap,
+                160, // width in pixels (increased from 100)
+                160, // height in pixels (increased from 100)
+                true
+            )
+        )
+    } ?: BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_BLUE)
+}
 
 @SuppressLint("MissingPermission")
 suspend fun getCurrentLocation(context: Context): LatLng? {
@@ -173,7 +190,7 @@ fun GoogleMapScreen() {
                     state = MarkerState(position = busStop.location),
                     title = busStop.name,
                     snippet = busStop.vicinity,
-                    icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_BLUE),
+                    icon = createBusStopMarkerIcon(context),
                     onClick = {
                         // Handle marker click - could show bus stop details
                         true

@@ -11,6 +11,9 @@ import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -35,7 +38,10 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.widget.addTextChangedListener
 import com.android.nextbus.BuildConfig
+import com.android.nextbus.data.model.BusStop
+import com.google.android.gms.maps.model.LatLng
 import com.google.android.libraries.places.api.Places
+import android.location.Location
 import com.google.android.libraries.places.api.model.AutocompleteSessionToken
 import com.google.android.libraries.places.api.net.FindAutocompletePredictionsRequest
 import com.google.android.libraries.places.api.net.PlacesClient
@@ -51,21 +57,44 @@ fun SearchCard(
     modifier: Modifier = Modifier,
     onSearchClick: () -> Unit = {},
     onFavoritesClick: () -> Unit = {},
-    onPlaceSelected: (PlaceSearchResult) -> Unit = {}
+    onNearbyClick: () -> Unit = {},
+    onPlaceSelected: (PlaceSearchResult) -> Unit = {},
+    busStops: List<BusStop> = emptyList(),
+    isLoadingBusStops: Boolean = false,
+    onBusStopSelected: (BusStop) -> Unit = {},
+    userLocation: LatLng? = null,
+    selectedBusStop: BusStop? = null,
+    isMinimized: Boolean = false,
+    onMinimizeToggle: () -> Unit = {}
 ) {
     var isExpanded by remember { mutableStateOf(false) }
     var dragOffset by remember { mutableStateOf(0f) }
     var searchQuery by remember { mutableStateOf("") }
     var searchResults by remember { mutableStateOf<List<PlaceSearchResult>>(emptyList()) }
     var isSearching by remember { mutableStateOf(false) }
+    var showingBusStops by remember { mutableStateOf(false) }
+    var showingBusStopDetails by remember { mutableStateOf(false) }
     val density = LocalDensity.current
     val configuration = LocalConfiguration.current
     val screenHeight = configuration.screenHeightDp.dp
     val context = LocalContext.current
     
-    // Animation for expansion - 95% of screen height when expanded
+    // Show bus stop details when a bus stop is selected
+    LaunchedEffect(selectedBusStop) {
+        if (selectedBusStop != null) {
+            showingBusStopDetails = true
+            isExpanded = true
+        }
+    }
+    
+    // Animation for expansion - different heights based on state
     val animatedHeight by animateFloatAsState(
-        targetValue = if (isExpanded) screenHeight.value * 0.95f else 160f,
+        targetValue = when {
+            isMinimized -> 40f // Only handle bar visible (40dp total height)
+            showingBusStopDetails -> screenHeight.value * 0.4f // 40% for bus stop details
+            isExpanded -> screenHeight.value * 0.95f // 95% for full search/list
+            else -> 160f // Collapsed state
+        },
         animationSpec = tween(durationMillis = 300),
         label = "height_animation"
     )
@@ -76,11 +105,28 @@ fun SearchCard(
             .pointerInput(Unit) {
                 detectDragGestures(
                     onDragEnd = {
-                        // Determine if we should expand or collapse based on drag direction and distance
-                        if (dragOffset < -100f) { // Dragged up significantly
-                            isExpanded = true
-                        } else if (dragOffset > 100f) { // Dragged down significantly
-                            isExpanded = false
+                        // Handle drag gestures based on current state
+                        if (showingBusStopDetails) {
+                            // When showing bus stop details, dragging should toggle minimize state
+                            if (dragOffset < -100f) { // Dragged up significantly
+                                if (isMinimized) {
+                                    // Expand from minimized to details view
+                                    onMinimizeToggle()
+                                    isExpanded = true
+                                }
+                            } else if (dragOffset > 100f) { // Dragged down significantly
+                                if (!isMinimized) {
+                                    // Minimize to handle bar only
+                                    onMinimizeToggle()
+                                }
+                            }
+                        } else {
+                            // Normal expand/collapse behavior for search
+                            if (dragOffset < -100f) { // Dragged up significantly
+                                isExpanded = true
+                            } else if (dragOffset > 100f) { // Dragged down significantly
+                                isExpanded = false
+                            }
                         }
                         dragOffset = 0f
                     }
@@ -109,13 +155,28 @@ fun SearchCard(
                         RoundedCornerShape(3.dp)
                     )
                     .align(Alignment.CenterHorizontally)
-                    .clickable { isExpanded = !isExpanded }
+                    .clickable { 
+                        if (showingBusStopDetails) {
+                            // Toggle between minimized and 40% details view
+                            val wasMinimized = isMinimized
+                            onMinimizeToggle()
+                            // If we were minimized and now expanding, ensure content is visible
+                            if (wasMinimized) {
+                                isExpanded = true
+                            }
+                        } else {
+                            // Normal expand/collapse behavior
+                            isExpanded = !isExpanded
+                        }
+                    }
             )
             
-            Spacer(modifier = Modifier.height(12.dp))
-            
-            // Search bar
-            if (!isExpanded) {
+            // Only show content when not minimized
+            if (!isMinimized) {
+                Spacer(modifier = Modifier.height(12.dp))
+                
+                // Search bar - hide when showing bus stop details
+                if (!isExpanded && !showingBusStopDetails) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -144,7 +205,7 @@ fun SearchCard(
                         modifier = Modifier.weight(1f)
                     )
                 }
-            } else {
+            } else if (!showingBusStopDetails) {
                 // Active search field when expanded
                 OutlinedTextField(
                     value = searchQuery,
@@ -199,10 +260,12 @@ fun SearchCard(
                 )
             }
             
-            Spacer(modifier = Modifier.height(16.dp))
-            
-            // Quick actions - always visible
-            Row(
+            // Only show spacer and quick actions when not showing bus stop details
+            if (!showingBusStopDetails) {
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                // Quick actions - hide when showing bus stop details
+                Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
@@ -251,7 +314,11 @@ fun SearchCard(
                 Row(
                     modifier = Modifier
                         .clip(RoundedCornerShape(8.dp))
-                        .clickable { /* Handle nearby */ }
+                        .clickable { 
+                            onNearbyClick()
+                            showingBusStops = true
+                            isExpanded = true
+                        }
                         .padding(12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -262,6 +329,7 @@ fun SearchCard(
                         fontWeight = FontWeight.Medium
                     )
                 }
+            }
             }
             
             // Expanded content - only visible when expanded
@@ -275,8 +343,109 @@ fun SearchCard(
                 
                 Spacer(modifier = Modifier.height(16.dp))
                 
-                // Search results or suggestions
-                if (searchQuery.isNotEmpty()) {
+                // Show bus stop details, bus stops results, or search results or suggestions
+                if (showingBusStopDetails && selectedBusStop != null) {
+                    BusStopDetailsView(
+                        busStop = selectedBusStop,
+                        userLocation = userLocation,
+                        onBackClick = {
+                            showingBusStopDetails = false
+                            showingBusStops = true
+                        }
+                    )
+                } else if (showingBusStops) {
+                    if (isLoadingBusStops) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(100.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(32.dp),
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = "Searching nearby bus stops...",
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    fontSize = 14.sp
+                                )
+                            }
+                        }
+                    } else if (busStops.isNotEmpty()) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Nearby Bus Stops (${busStops.size})",
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            TextButton(
+                                onClick = {
+                                    showingBusStops = false
+                                    searchQuery = ""
+                                }
+                            ) {
+                                Text("Back to Search")
+                            }
+                        }
+                        
+                        Spacer(modifier = Modifier.height(8.dp))
+                        
+                        LazyColumn(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            items(busStops) { busStop ->
+                                BusStopResultItem(
+                                    busStop = busStop,
+                                    userLocation = userLocation,
+                                    onClick = {
+                                        onBusStopSelected(busStop)
+                                        showingBusStopDetails = true
+                                        showingBusStops = false
+                                    }
+                                )
+                            }
+                        }
+                    } else {
+                        Column {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "No nearby bus stops found",
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    fontSize = 14.sp
+                                )
+                                TextButton(
+                                    onClick = {
+                                        showingBusStops = false
+                                        searchQuery = ""
+                                    }
+                                ) {
+                                    Text("Back to Search")
+                                }
+                            }
+                            Text(
+                                text = "Try moving to a different location or check your internet connection.",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontSize = 12.sp,
+                                modifier = Modifier.padding(top = 4.dp)
+                            )
+                        }
+                    }
+                } else if (searchQuery.isNotEmpty()) {
                     if (isSearching) {
                         Box(
                             modifier = Modifier
@@ -365,6 +534,7 @@ fun SearchCard(
                 }
             }
         }
+            } // Close the !isMinimized if statement
     }
 }
 
@@ -455,6 +625,95 @@ private fun SearchCategoryItem(
     }
 }
 
+@Composable
+private fun BusStopResultItem(
+    busStop: BusStop,
+    userLocation: LatLng?,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    // Calculate distance from user location
+    val distance = userLocation?.let { 
+        calculateDistance(it, busStop.location)
+    }
+    
+    val distanceText = distance?.let { dist ->
+        when {
+            dist < 1000f -> "${dist.toInt()}m"
+            else -> "${"%.1f".format(dist / 1000f)}km"
+        }
+    }
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .clickable { onClick() }
+            .padding(12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = Icons.Default.LocationOn,
+            contentDescription = "Bus Stop",
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(24.dp)
+        )
+        
+        Spacer(modifier = Modifier.width(12.dp))
+        
+        Column(
+            modifier = Modifier.weight(1f)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = busStop.name,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier.weight(1f)
+                )
+                
+                // Display distance
+                distanceText?.let { distance ->
+                    Text(
+                        text = distance,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(start = 8.dp)
+                    )
+                }
+            }
+            
+            if (busStop.vicinity.isNotEmpty() && busStop.vicinity != "--NA--") {
+                Text(
+                    text = busStop.vicinity,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 14.sp
+                )
+            }
+            
+            // Show tap instruction
+            Text(
+                text = "Tap to show on map",
+                color = MaterialTheme.colorScheme.primary,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium
+            )
+        }
+        
+        Icon(
+            imageVector = Icons.Default.LocationOn,
+            contentDescription = "Show on map",
+            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
+            modifier = Modifier.size(20.dp)
+        )
+    }
+}
+
 // Function to search places using Google Places API
 private fun searchPlaces(
     context: Context,
@@ -499,5 +758,199 @@ private fun searchPlaces(
         println("Places API Initialization Error: ${e.message}")
         e.printStackTrace()
         onResult(emptyList())
+    }
+}
+
+/**
+ * Calculate distance between two LatLng points using Android Location API
+ * Returns distance in meters
+ */
+private fun calculateDistance(from: LatLng, to: LatLng): Float {
+    val results = FloatArray(1)
+    Location.distanceBetween(
+        from.latitude, from.longitude,
+        to.latitude, to.longitude,
+        results
+    )
+    return results[0]
+}
+
+@Composable
+private fun BusStopDetailsView(
+    busStop: BusStop,
+    userLocation: LatLng?,
+    onBackClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    // Calculate distance
+    val distance = userLocation?.let { 
+        calculateDistance(it, busStop.location)
+    }
+    
+    val distanceText = distance?.let { dist ->
+        when {
+            dist < 1000f -> "${dist.toInt()}m away"
+            else -> "${"%.1f".format(dist / 1000f)}km away"
+        }
+    }
+    
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .verticalScroll(rememberScrollState())
+    ) {
+        // Header with back button
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Bus Stop Details",
+                fontSize = 18.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            TextButton(onClick = onBackClick) {
+                Text("Back to List")
+            }
+        }
+        
+        Spacer(modifier = Modifier.height(16.dp))
+        
+        // Bus stop details card
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+            )
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp)
+            ) {
+                // Bus stop name
+                Text(
+                    text = busStop.name,
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                
+                Spacer(modifier = Modifier.height(8.dp))
+                
+                // Distance
+                distanceText?.let { distance ->
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.LocationOn,
+                            contentDescription = "Distance",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = distance,
+                            fontSize = 16.sp,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
+                
+                // Address/Vicinity
+                if (busStop.vicinity.isNotEmpty() && busStop.vicinity != "--NA--") {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "Address:",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = busStop.vicinity,
+                        fontSize = 16.sp,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+                
+                // Location coordinates
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    text = "Coordinates:",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = "${busStop.location.latitude}, ${busStop.location.longitude}",
+                    fontSize = 14.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
+                )
+                
+                // Bus stop types if available
+                if (busStop.types.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        text = "Types:",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(busStop.types) { type ->
+                            Card(
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
+                                )
+                            ) {
+                                Text(
+                                    text = type.replace("_", " ").lowercase().replaceFirstChar { it.uppercase() },
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
+                    }
+                }
+                
+                // Rating if available
+                busStop.rating?.let { rating ->
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Rating:",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "$rating ⭐",
+                            fontSize = 16.sp,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                }
+            }
+        }
+        
+        Spacer(modifier = Modifier.height(16.dp))
+        
+        // Action text
+        Text(
+            text = "This bus stop is now marked on the map above",
+            fontSize = 14.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.fillMaxWidth(),
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+        )
     }
 }

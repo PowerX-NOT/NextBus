@@ -14,12 +14,15 @@ import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.font.FontWeight
 import kotlinx.coroutines.launch
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.google.android.gms.location.FusedLocationProviderClient
@@ -33,8 +36,12 @@ import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
 import com.google.android.gms.maps.model.MapStyleOptions
+import com.google.android.gms.maps.model.BitmapDescriptorFactory
 import com.google.maps.android.compose.*
 import com.android.nextbus.ui.components.SearchCard
+import com.android.nextbus.data.model.BusStop
+import androidx.compose.foundation.border
+import androidx.compose.ui.graphics.toArgb
 
 @SuppressLint("MissingPermission")
 suspend fun getCurrentLocation(context: Context): LatLng? {
@@ -58,6 +65,16 @@ fun GoogleMapScreen() {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     
+    // ViewModel for managing bus stops
+    val mapViewModel = remember { MapViewModel(context) }
+    
+    // Collect states from ViewModel
+    val busStops by mapViewModel.busStops.collectAsState()
+    val isLoadingBusStops by mapViewModel.isLoading.collectAsState()
+    val isSearching by mapViewModel.isSearching.collectAsState()
+    val showBusStops by mapViewModel.showBusStops.collectAsState()
+    val error by mapViewModel.error.collectAsState()
+    
     // Location permission
     val locationPermissionState = rememberPermissionState(
         Manifest.permission.ACCESS_FINE_LOCATION
@@ -66,6 +83,12 @@ fun GoogleMapScreen() {
     // State for user location
     var userLocation by remember { mutableStateOf<LatLng?>(null) }
     var isLocationLoading by remember { mutableStateOf(true) }
+    
+    // State for selected bus stop marker
+    var selectedBusStop by remember { mutableStateOf<BusStop?>(null) }
+    
+    // State for minimizing SearchCard when showing bus stop details
+    var isSearchCardMinimized by remember { mutableStateOf(false) }
     
     // Default fallback to Bangalore if location not available
     val defaultLocation = LatLng(12.9716, 77.5946)
@@ -126,9 +149,27 @@ fun GoogleMapScreen() {
             contentPadding = PaddingValues(
                 top = 600.dp, // Position compass lower, above recenter button
                 start = 337.dp // Keep compass on the right side
-            )
+            ),
+            onMapClick = {
+                // Minimize SearchCard when map is clicked and bus stop details are showing
+                if (selectedBusStop != null && !isSearchCardMinimized) {
+                    isSearchCardMinimized = true
+                }
+            }
         ) {
-            // Map markers will be added here when real data is integrated
+            // Display only the selected bus stop marker
+            selectedBusStop?.let { busStop ->
+                Marker(
+                    state = MarkerState(position = busStop.location),
+                    title = busStop.name,
+                    snippet = busStop.vicinity,
+                    icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_BLUE),
+                    onClick = {
+                        // Handle marker click - could show bus stop details
+                        true
+                    }
+                )
+            }
         }
         
         // Top controls
@@ -203,8 +244,77 @@ fun GoogleMapScreen() {
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth(),
             onSearchClick = { /* Handle search click */ },
-            onFavoritesClick = { /* Handle favorites click */ }
+            onFavoritesClick = { /* Handle favorites click */ },
+            onNearbyClick = {
+                if (locationPermissionState.status.isGranted && userLocation != null) {
+                    userLocation?.let { location ->
+                        mapViewModel.searchNearbyBusStops(location)
+                    }
+                } else {
+                    locationPermissionState.launchPermissionRequest()
+                }
+            },
+            busStops = busStops,
+            isLoadingBusStops = isLoadingBusStops,
+            userLocation = userLocation,
+            selectedBusStop = selectedBusStop,
+            isMinimized = isSearchCardMinimized,
+            onMinimizeToggle = {
+                isSearchCardMinimized = !isSearchCardMinimized
+            },
+            onBusStopSelected = { busStop ->
+                selectedBusStop = busStop
+                isSearchCardMinimized = false // Reset minimize state when new bus stop is selected
+                // Center map on selected bus stop
+                coroutineScope.launch {
+                    cameraPositionState.animate(
+                        CameraUpdateFactory.newCameraPosition(
+                            CameraPosition.Builder()
+                                .target(busStop.location)
+                                .zoom(16f)
+                                .bearing(0f)
+                                .tilt(0f)
+                                .build()
+                        ),
+                        1000
+                    )
+                }
+            }
         )
+        
+        
+        // Show error message if any
+        error?.let { errorMessage ->
+            Card(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(16.dp)
+                    .padding(top = 80.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.errorContainer
+                )
+            ) {
+                Row(
+                    modifier = Modifier.padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = errorMessage,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                        modifier = Modifier.weight(1f)
+                    )
+                    TextButton(
+                        onClick = { mapViewModel.clearError() }
+                    ) {
+                        Text(
+                            text = "Dismiss",
+                            color = MaterialTheme.colorScheme.onErrorContainer
+                        )
+                    }
+                }
+            }
+        }
     }
     
     // Request location permission on first launch

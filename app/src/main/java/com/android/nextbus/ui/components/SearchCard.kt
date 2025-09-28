@@ -65,7 +65,8 @@ fun SearchCard(
     userLocation: LatLng? = null,
     selectedBusStop: BusStop? = null,
     isMinimized: Boolean = false,
-    onMinimizeToggle: () -> Unit = {}
+    onMinimizeToggle: () -> Unit = {},
+    onExpandedChange: (Boolean) -> Unit = {}
 ) {
     var isExpanded by remember { mutableStateOf(false) }
     var dragOffset by remember { mutableStateOf(0f) }
@@ -85,6 +86,11 @@ fun SearchCard(
             showingBusStopDetails = true
             isExpanded = true
         }
+    }
+    
+    // Notify parent about expanded state changes
+    LaunchedEffect(isExpanded) {
+        onExpandedChange(isExpanded)
     }
     
     // Animation for expansion - different heights based on state

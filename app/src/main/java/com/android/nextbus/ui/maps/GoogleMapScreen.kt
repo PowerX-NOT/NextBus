@@ -20,9 +20,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import kotlinx.coroutines.launch
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.google.android.gms.location.FusedLocationProviderClient
@@ -64,9 +67,11 @@ suspend fun getCurrentLocation(context: Context): LatLng? {
 fun GoogleMapScreen() {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
+    val configuration = LocalConfiguration.current
+    val screenHeight = configuration.screenHeightDp.dp
     
     // ViewModel for managing bus stops
-    val mapViewModel = remember { MapViewModel(context) }
+    val mapViewModel: MapViewModel = viewModel { MapViewModel(context) }
     
     // Collect states from ViewModel
     val busStops by mapViewModel.busStops.collectAsState()
@@ -89,13 +94,27 @@ fun GoogleMapScreen() {
     
     // State for minimizing SearchCard when showing bus stop details
     var isSearchCardMinimized by remember { mutableStateOf(false) }
+    var isSearchCardExpanded by remember { mutableStateOf(false) }
+    
+    // Calculate dynamic recenter button position based on SearchCard state
+    val recenterButtonBottomPadding by animateFloatAsState(
+        targetValue = when {
+            isSearchCardMinimized -> 60f // 40dp SearchCard + 20dp margin
+            selectedBusStop != null -> screenHeight.value * 0.4f + 20f // 40% SearchCard + margin
+            isSearchCardExpanded -> screenHeight.value * 0.95f + 20f // 95% SearchCard + margin
+            else -> 180f // Default collapsed state + margin
+        },
+        animationSpec = tween(durationMillis = 300),
+        label = "recenter_button_animation"
+    )
+    
     
     // Default fallback to Bangalore if location not available
     val defaultLocation = LatLng(12.9716, 77.5946)
     val currentLocation = userLocation ?: defaultLocation
     
     val cameraPositionState = rememberCameraPositionState {
-        position = CameraPosition.fromLatLngZoom(currentLocation, 15f)
+        position = CameraPosition.fromLatLngZoom(currentLocation, 16f)
     }
     
     // Get user location when permission is granted
@@ -106,18 +125,13 @@ fun GoogleMapScreen() {
             userLocation = location
             isLocationLoading = false
             
-            // Update camera position to user location with offset for search card
+            // Update camera position to user location
             location?.let {
-                // Calculate offset to center location in visible area (same as recenter button)
-                val offsetLat = it.latitude - 0.015 // Move up to account for large bottom padding
-                val offsetLng = it.longitude + 0.008 // Move left to account for right padding
-                val adjustedLocation = LatLng(offsetLat, offsetLng)
-                
                 cameraPositionState.animate(
                     CameraUpdateFactory.newCameraPosition(
                         CameraPosition.Builder()
-                            .target(adjustedLocation)
-                            .zoom(15f)
+                            .target(it) // Use actual user location without offset
+                            .zoom(16f) // Match recenter button zoom level
                             .bearing(0f) // Reset compass to north
                             .tilt(0f)    // Reset tilt to flat
                             .build()
@@ -144,11 +158,7 @@ fun GoogleMapScreen() {
                 zoomControlsEnabled = false,
                 myLocationButtonEnabled = false,
                 mapToolbarEnabled = false,
-                compassEnabled = true
-            ),
-            contentPadding = PaddingValues(
-                top = 600.dp, // Position compass lower, above recenter button
-                start = 337.dp // Keep compass on the right side
+                compassEnabled = false
             ),
             onMapClick = {
                 // Minimize SearchCard when map is clicked and bus stop details are showing
@@ -198,19 +208,14 @@ fun GoogleMapScreen() {
         FloatingActionButton(
             onClick = {
                 if (locationPermissionState.status.isGranted && userLocation != null) {
-                    // Recenter to user location, accounting for map padding
+                    // Recenter to user location
                     userLocation?.let { location ->
                         coroutineScope.launch {
-                            // Calculate offset to center location in visible area
-                            val offsetLat = location.latitude - 0.015 // Move up to account for large bottom padding
-                            val offsetLng = location.longitude + 0.008 // Move left to account for right padding
-                            val adjustedLocation = LatLng(offsetLat, offsetLng)
-                            
                             cameraPositionState.animate(
                                 CameraUpdateFactory.newCameraPosition(
                                     CameraPosition.Builder()
-                                        .target(adjustedLocation)
-                                        .zoom(15f)
+                                        .target(location) // Use actual user location without offset
+                                        .zoom(16f) // Slightly closer zoom for better visibility
                                         .bearing(0f) // Reset compass to north
                                         .tilt(0f)    // Reset tilt to flat
                                         .build()
@@ -227,7 +232,7 @@ fun GoogleMapScreen() {
             modifier = Modifier
                 .align(Alignment.BottomEnd)
                 .padding(16.dp)
-                .padding(bottom = 170.dp) // Increased bottom padding to move button up
+                .padding(bottom = recenterButtonBottomPadding.dp)
                 .size(56.dp),
             containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
             contentColor = MaterialTheme.colorScheme.onSurface
@@ -243,7 +248,9 @@ fun GoogleMapScreen() {
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth(),
-            onSearchClick = { /* Handle search click */ },
+            onSearchClick = { 
+                isSearchCardExpanded = true
+            },
             onFavoritesClick = { /* Handle favorites click */ },
             onNearbyClick = {
                 if (locationPermissionState.status.isGranted && userLocation != null) {
@@ -261,6 +268,9 @@ fun GoogleMapScreen() {
             isMinimized = isSearchCardMinimized,
             onMinimizeToggle = {
                 isSearchCardMinimized = !isSearchCardMinimized
+            },
+            onExpandedChange = { expanded ->
+                isSearchCardExpanded = expanded
             },
             onBusStopSelected = { busStop ->
                 selectedBusStop = busStop

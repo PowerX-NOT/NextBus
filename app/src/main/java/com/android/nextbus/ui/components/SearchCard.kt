@@ -65,6 +65,7 @@ fun SearchCard(
     onPlaceSelected: (PlaceSearchResult) -> Unit = {},
     onBusStopSelected: (BusStop) -> Unit = {},
     busStops: List<BusStop> = emptyList(),
+    selectedBusStop: BusStop? = null,
     isLoadingBusStops: Boolean = false,
     userLocation: com.google.android.gms.maps.model.LatLng? = null
 ) {
@@ -295,12 +296,16 @@ fun SearchCard(
                 }
             }
             
-            // Show heading for bus stops with divider below
-            if (busStops.isNotEmpty()) {
+            // Show heading for bus stops or selected bus stop with divider below
+            if (busStops.isNotEmpty() || selectedBusStop != null) {
                 Spacer(modifier = Modifier.height(4.dp))
                 
                 Text(
-                    text = "Nearby Bus Stations (${busStops.size})",
+                    text = if (selectedBusStop != null) {
+                        selectedBusStop.name
+                    } else {
+                        "Nearby Bus Stations (${busStops.size})"
+                    },
                     style = MaterialTheme.typography.titleLarge,
                     color = MaterialTheme.colorScheme.onSurface,
                     fontWeight = FontWeight.Bold,
@@ -314,7 +319,7 @@ fun SearchCard(
                     thickness = 1.dp
                 )
                 
-                // NextBus branding - only show when not expanded
+                // NextBus branding - show when not expanded (for both nearby list and selected bus stop)
                 if (!isExpanded) {
                     Spacer(modifier = Modifier.height(12.dp))
                     
@@ -357,7 +362,74 @@ fun SearchCard(
                         }
                     }
                 }
-                // Bus stop results
+                // Selected bus stop details or bus stop results
+                else if (selectedBusStop != null) {
+                    // Show selected bus stop details
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp)
+                    ) {
+                        // Address/Vicinity
+                        if (selectedBusStop.vicinity.isNotEmpty()) {
+                            Text(
+                                text = selectedBusStop.vicinity,
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.padding(bottom = 8.dp)
+                            )
+                        }
+                        
+                        // Distance if available
+                        userLocation?.let { userLoc ->
+                            val distance = calculateDistance(userLoc, selectedBusStop.location)
+                            val distanceText = if (distance < 1000) {
+                                "${distance.toInt()} m away"
+                            } else {
+                                "${String.format("%.0f", distance / 1000)} km away"
+                            }
+                            Text(
+                                text = distanceText,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.Medium,
+                                modifier = Modifier.padding(bottom = 8.dp)
+                            )
+                        }
+                        
+                        // Rating if available
+                        selectedBusStop.rating?.let { rating ->
+                            Text(
+                                text = "Rating: ${String.format("%.1f", rating)} ⭐",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(bottom = 8.dp)
+                            )
+                        }
+                        
+                        // Types/Categories
+                        if (selectedBusStop.types.isNotEmpty()) {
+                            Text(
+                                text = selectedBusStop.types.joinToString(", ") { 
+                                    it.replace("_", " ").replaceFirstChar { char -> 
+                                        if (char.isLowerCase()) char.titlecase() else char.toString() 
+                                    }
+                                },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(bottom = 16.dp)
+                            )
+                        }
+                        
+                        // Location coordinates
+                        Text(
+                            text = "Location: ${String.format("%.6f", selectedBusStop.location.latitude)}, ${String.format("%.6f", selectedBusStop.location.longitude)}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
+                        )
+                    }
+                }
                 else if (busStops.isNotEmpty()) {
                     LazyColumn {
                         items(busStops) { busStop ->

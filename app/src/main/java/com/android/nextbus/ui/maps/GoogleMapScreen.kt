@@ -154,10 +154,14 @@ fun GoogleMapScreen(
     
     // Handle back button behavior
     BackHandler(
-        enabled = isSearchCardExpanded || isSearchCardMinimized || busStops.isNotEmpty()
+        enabled = isSearchCardExpanded || isSearchCardMinimized || busStops.isNotEmpty() || selectedBusStop != null
     ) {
         when {
-            // If there are bus stops visible, clear them first
+            // If a bus stop is selected, clear selection first
+            selectedBusStop != null -> {
+                viewModel.clearSelectedBusStop()
+            }
+            // If there are bus stops visible, clear them
             busStops.isNotEmpty() -> {
                 viewModel.clearBusStops()
                 viewModel.setSearchCardExpanded(false)
@@ -257,7 +261,12 @@ fun GoogleMapScreen(
             )
         ) {
             // Bus stop markers with custom pins
-            busStops.forEach { busStop ->
+            // If a bus stop is selected, only show that one. Otherwise show all.
+            val markersToShow = selectedBusStop?.let { selected ->
+                listOf(selected)
+            } ?: busStops
+            
+            markersToShow.forEach { busStop ->
                 val customIcon = if (selectedBusStop?.id == busStop.id) {
                     // Use yellow pin for selected bus stop
                     bitmapDescriptorFromVector(context, R.drawable.bus_stop_yellow, 160, 160)
@@ -447,6 +456,7 @@ fun GoogleMapScreen(
                 }
             },
             busStops = busStops,
+            selectedBusStop = selectedBusStop,
             isLoadingBusStops = isLoading,
             userLocation = userLocation
         )

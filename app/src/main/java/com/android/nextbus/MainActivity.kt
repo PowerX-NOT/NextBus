@@ -21,7 +21,12 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    GoogleMapScreen()
+                    GoogleMapScreen(
+                        onBackPressed = {
+                            // Handle back navigation - finish activity since this is the main screen
+                            finish()
+                        }
+                    )
                 }
             }
         }

@@ -22,6 +22,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.activity.compose.BackHandler
+import androidx.compose.runtime.saveable.rememberSaveable
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationServices
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -54,7 +56,9 @@ suspend fun getCurrentLocation(context: Context): LatLng? {
 
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
-fun GoogleMapScreen() {
+fun GoogleMapScreen(
+    onBackPressed: (() -> Unit)? = null
+) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     
@@ -71,8 +75,22 @@ fun GoogleMapScreen() {
     val defaultLocation = LatLng(12.9716, 77.5946)
     val currentLocation = userLocation ?: defaultLocation
     
+    // Search card states
+    var isSearchCardExpanded by rememberSaveable { mutableStateOf(false) }
+    var isSearchCardMinimized by rememberSaveable { mutableStateOf(false) }
+    
     val cameraPositionState = rememberCameraPositionState {
         position = CameraPosition.fromLatLngZoom(currentLocation, 15f)
+    }
+    
+    // Handle back button behavior
+    BackHandler(
+        enabled = isSearchCardExpanded || isSearchCardMinimized
+    ) {
+        when {
+            isSearchCardExpanded -> isSearchCardExpanded = false
+            isSearchCardMinimized -> isSearchCardMinimized = false
+        }
     }
     
     // Get user location when permission is granted
@@ -141,7 +159,9 @@ fun GoogleMapScreen() {
         ) {
             // Back button
             FloatingActionButton(
-                onClick = { /* Handle back navigation */ },
+                onClick = { 
+                    onBackPressed?.invoke()
+                },
                 modifier = Modifier.size(48.dp),
                 containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
                 contentColor = MaterialTheme.colorScheme.onSurface
@@ -202,7 +222,11 @@ fun GoogleMapScreen() {
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth(),
-            onSearchClick = { /* Handle search click */ },
+            isExpanded = isSearchCardExpanded,
+            isMinimized = isSearchCardMinimized,
+            onExpandedChange = { isSearchCardExpanded = it },
+            onMinimizedChange = { isSearchCardMinimized = it },
+            onSearchClick = { isSearchCardExpanded = true },
             onFavoritesClick = { /* Handle favorites click */ }
         )
     }

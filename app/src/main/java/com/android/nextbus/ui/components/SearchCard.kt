@@ -49,11 +49,14 @@ data class PlaceSearchResult(
 @Composable
 fun SearchCard(
     modifier: Modifier = Modifier,
+    isExpanded: Boolean = false,
+    isMinimized: Boolean = false,
+    onExpandedChange: (Boolean) -> Unit = {},
+    onMinimizedChange: (Boolean) -> Unit = {},
     onSearchClick: () -> Unit = {},
     onFavoritesClick: () -> Unit = {},
     onPlaceSelected: (PlaceSearchResult) -> Unit = {}
 ) {
-    var isExpanded by remember { mutableStateOf(false) }
     var dragOffset by remember { mutableStateOf(0f) }
     var searchQuery by remember { mutableStateOf("") }
     var searchResults by remember { mutableStateOf<List<PlaceSearchResult>>(emptyList()) }
@@ -78,9 +81,9 @@ fun SearchCard(
                     onDragEnd = {
                         // Determine if we should expand or collapse based on drag direction and distance
                         if (dragOffset < -100f) { // Dragged up significantly
-                            isExpanded = true
+                            onExpandedChange(true)
                         } else if (dragOffset > 100f) { // Dragged down significantly
-                            isExpanded = false
+                            onExpandedChange(false)
                         }
                         dragOffset = 0f
                     }
@@ -109,7 +112,7 @@ fun SearchCard(
                         RoundedCornerShape(3.dp)
                     )
                     .align(Alignment.CenterHorizontally)
-                    .clickable { isExpanded = !isExpanded }
+                    .clickable { onExpandedChange(!isExpanded) }
             )
             
             Spacer(modifier = Modifier.height(12.dp))
@@ -122,7 +125,7 @@ fun SearchCard(
                         .clip(RoundedCornerShape(28.dp))
                         .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f))
                         .clickable { 
-                            isExpanded = true
+                            onExpandedChange(true)
                             onSearchClick() 
                         }
                         .padding(horizontal = 20.dp, vertical = 14.dp),
@@ -307,7 +310,7 @@ fun SearchCard(
                                     result = result,
                                     onClick = {
                                         onPlaceSelected(result)
-                                        isExpanded = false
+                                        onExpandedChange(false)
                                         searchQuery = ""
                                         searchResults = emptyList()
                                     }

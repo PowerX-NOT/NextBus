@@ -39,10 +39,12 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.widget.addTextChangedListener
 import com.android.nextbus.BuildConfig
+import com.android.nextbus.data.model.BusStop
 import com.google.android.libraries.places.api.Places
 import com.google.android.libraries.places.api.model.AutocompleteSessionToken
 import com.google.android.libraries.places.api.net.FindAutocompletePredictionsRequest
 import com.google.android.libraries.places.api.net.PlacesClient
+import android.location.Location
 
 data class PlaceSearchResult(
     val name: String,
@@ -59,7 +61,12 @@ fun SearchCard(
     onMinimizedChange: (Boolean) -> Unit = {},
     onSearchClick: () -> Unit = {},
     onFavoritesClick: () -> Unit = {},
-    onPlaceSelected: (PlaceSearchResult) -> Unit = {}
+    onNearbyClick: () -> Unit = {},
+    onPlaceSelected: (PlaceSearchResult) -> Unit = {},
+    onBusStopSelected: (BusStop) -> Unit = {},
+    busStops: List<BusStop> = emptyList(),
+    isLoadingBusStops: Boolean = false,
+    userLocation: com.google.android.gms.maps.model.LatLng? = null
 ) {
     var dragOffset by remember { mutableStateOf(0f) }
     var searchQuery by remember { mutableStateOf("") }
@@ -137,8 +144,8 @@ fun SearchCard(
             
             Spacer(modifier = Modifier.height(12.dp))
             
-            // Search bar
-            if (!isExpanded) {
+            // Search bar - hide when bus stops are shown
+            if (!isExpanded && busStops.isEmpty()) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -167,7 +174,7 @@ fun SearchCard(
                         modifier = Modifier.weight(1f)
                     )
                 }
-            } else {
+            } else if (isExpanded && busStops.isEmpty()) {
                 // Active search field when expanded
                 OutlinedTextField(
                     value = searchQuery,
@@ -224,81 +231,148 @@ fun SearchCard(
             
             Spacer(modifier = Modifier.height(16.dp))
             
-            // Quick actions - always visible
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                // Favorites button
+            // Quick actions - hide favorites when bus stops are shown
+            if (busStops.isEmpty()) {
                 Row(
-                    modifier = Modifier
-                        .weight(1f)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
-                        .clickable { onFavoritesClick() }
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Center
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Favorite,
-                        contentDescription = "Favorites",
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(20.dp)
-                    )
+                    // Favorites button
+                    Row(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
+                            .clickable { onFavoritesClick() }
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Favorite,
+                            contentDescription = "Favorites",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        
+                        Spacer(modifier = Modifier.width(8.dp))
+                        
+                        Text(
+                            text = "Favorites",
+                            color = MaterialTheme.colorScheme.onSurface,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
                     
-                    Spacer(modifier = Modifier.width(8.dp))
-                    
-                    Text(
-                        text = "Favorites",
-                        color = MaterialTheme.colorScheme.onSurface,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
-                
-                // Nearby stops
-                Row(
-                    modifier = Modifier
-                        .weight(1f)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
-                        .clickable { /* Handle nearby */ }
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.LocationOn,
-                        contentDescription = "Nearby",
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    
-                    Spacer(modifier = Modifier.width(8.dp))
-                    
-                    Text(
-                        text = "Nearby",
-                        color = MaterialTheme.colorScheme.onSurface,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Medium
-                    )
+                    // Nearby stops
+                    Row(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
+                            .clickable { onNearbyClick() }
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.LocationOn,
+                            contentDescription = "Nearby",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        
+                        Spacer(modifier = Modifier.width(8.dp))
+                        
+                        Text(
+                            text = "Nearby",
+                            color = MaterialTheme.colorScheme.onSurface,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
                 }
             }
             
-            // Expanded content - only visible when expanded
-            if (isExpanded) {
-                Spacer(modifier = Modifier.height(16.dp))
+            // Show heading for bus stops with divider below
+            if (busStops.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(4.dp))
+                
+                Text(
+                    text = "Nearby Bus Stations (${busStops.size})",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp)
+                )
+                
+                Spacer(modifier = Modifier.height(8.dp))
                 
                 HorizontalDivider(
                     color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
                     thickness = 1.dp
                 )
                 
-                Spacer(modifier = Modifier.height(16.dp))
+                // NextBus branding - only show when not expanded
+                if (!isExpanded) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    
+                    Text(
+                        text = "NextBus",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 16.dp)
+                    )
+                    
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+            }
+            
+            // Expanded content - only visible when expanded
+            if (isExpanded) {
+                Spacer(modifier = Modifier.height(8.dp))
                 
+                // Loading state for bus stops
+                if (isLoadingBusStops) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(32.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            CircularProgressIndicator(
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Text(
+                                text = "Searching for nearby bus stops...",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+                // Bus stop results
+                else if (busStops.isNotEmpty()) {
+                    LazyColumn {
+                        items(busStops) { busStop ->
+                            BusStopResultItem(
+                                busStop = busStop,
+                                userLocation = userLocation,
+                                onClick = {
+                                    onBusStopSelected(busStop)
+                                }
+                            )
+                        }
+                    }
+                }
                 // Search results or suggestions
-                if (searchQuery.isNotEmpty()) {
+                else if (searchQuery.isNotEmpty()) {
                     if (isSearching) {
                         Box(
                             modifier = Modifier
@@ -317,77 +391,56 @@ fun SearchCard(
                             fontSize = 16.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.padding(bottom = 8.dp)
+                            modifier = Modifier.padding(horizontal = 16.dp)
                         )
                         
-                        LazyColumn(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        
+                        LazyColumn {
                             items(searchResults) { result ->
                                 SearchResultItem(
                                     result = result,
                                     onClick = {
-                                        addToRecentSearches(result) // Add to recent searches
+                                        addToRecentSearches(result)
                                         onPlaceSelected(result)
-                                        onExpandedChange(false)
                                         searchQuery = ""
                                         searchResults = emptyList()
                                     }
                                 )
                             }
                         }
-                    } else {
-                        Text(
-                            text = "No results found",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            fontSize = 14.sp,
-                            modifier = Modifier.padding(16.dp)
-                        )
+                    }
+                } else if (recentSearches.isNotEmpty()) {
+                    // Recent searches when no search results
+                    Text(
+                        text = "Recent Searches",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.padding(horizontal = 16.dp)
+                    )
+                    
+                    Spacer(modifier = Modifier.height(8.dp))
+                    
+                    LazyColumn {
+                        items(recentSearches) { result ->
+                            SearchResultItem(
+                                result = result,
+                                onClick = {
+                                    onPlaceSelected(result)
+                                    searchQuery = ""
+                                    searchResults = emptyList()
+                                }
+                            )
+                        }
                     }
                 } else {
-                    // Recent searches when no query
-                    if (recentSearches.isNotEmpty()) {
-                        Text(
-                            text = "Recent",
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        
-                        Spacer(modifier = Modifier.height(12.dp))
-                        
-                        // Recent search items
-                        LazyColumn(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            items(recentSearches) { recent ->
-                                SearchResultItem(
-                                    result = recent,
-                                    onClick = {
-                                        searchQuery = recent.name
-                                        // Optionally trigger search for this recent item
-                                        if (recent.name.isNotBlank()) {
-                                            isSearching = true
-                                            searchPlaces(context, recent.name) { results ->
-                                                searchResults = results
-                                                isSearching = false
-                                            }
-                                        }
-                                    }
-                                )
-                            }
-                        }
-                    } else {
-                        // Show message when no recent searches
-                        Text(
-                            text = "No recent searches",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            fontSize = 16.sp,
-                            modifier = Modifier.padding(16.dp)
-                        )
-                    }
+                    // Show message when no recent searches
+                    Text(
+                        text = "No recent searches",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = 16.sp,
+                        modifier = Modifier.padding(16.dp)
+                    )
                 }
             }
         }
@@ -479,6 +532,108 @@ private fun SearchCategoryItem(
             )
         }
     }
+}
+
+@Composable
+private fun BusStopResultItem(
+    busStop: BusStop,
+    userLocation: com.google.android.gms.maps.model.LatLng?,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .clickable { onClick() }
+            .padding(12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = Icons.Default.LocationOn,
+            contentDescription = "Bus Stop",
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(24.dp)
+        )
+        
+        Spacer(modifier = Modifier.width(12.dp))
+        
+        Column(
+            modifier = Modifier.weight(1f)
+        ) {
+            Text(
+                text = busStop.name,
+                color = MaterialTheme.colorScheme.onSurface,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Medium
+            )
+            
+            if (busStop.vicinity.isNotEmpty() && busStop.vicinity != "--NA--") {
+                Text(
+                    text = busStop.vicinity,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 14.sp
+                )
+            }
+            
+            // Show distance if user location is available
+            userLocation?.let { userLoc ->
+                val distance = calculateDistance(userLoc, busStop.location)
+                val distanceText = if (distance < 1000) {
+                    "${distance.toInt()} m away"
+                } else {
+                    "${String.format("%.0f", distance / 1000)} km away"
+                }
+                Text(
+                    text = distanceText,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 12.sp
+                )
+            }
+            
+            // Show bus stop types
+            if (busStop.types.isNotEmpty()) {
+                Text(
+                    text = busStop.types.joinToString(", ") { 
+                        it.replace("_", " ").replaceFirstChar { char -> 
+                            if (char.isLowerCase()) char.titlecase() else char.toString() 
+                        } 
+                    },
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 12.sp
+                )
+            }
+        }
+        
+        // Show rating if available
+        busStop.rating?.let { rating ->
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = "★",
+                    color = Color(0xFFFFD700), // Gold color
+                    fontSize = 16.sp
+                )
+                Text(
+                    text = String.format("%.1f", rating),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 12.sp
+                )
+            }
+        }
+    }
+}
+
+// Helper function to calculate distance between two LatLng points
+private fun calculateDistance(point1: com.google.android.gms.maps.model.LatLng, point2: com.google.android.gms.maps.model.LatLng): Float {
+    val results = FloatArray(1)
+    Location.distanceBetween(
+        point1.latitude, point1.longitude,
+        point2.latitude, point2.longitude,
+        results
+    )
+    return results[0]
 }
 
 // Function to search places using Google Places API

@@ -44,6 +44,31 @@ import com.google.android.gms.maps.model.LatLng
 import com.google.android.gms.maps.model.MapStyleOptions
 import com.google.maps.android.compose.*
 import com.android.nextbus.ui.components.SearchCard
+import com.android.nextbus.data.model.BusStop
+import com.google.android.gms.maps.model.BitmapDescriptorFactory
+import com.google.android.gms.maps.model.MarkerOptions
+import com.android.nextbus.R
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.drawable.Drawable
+import androidx.core.content.ContextCompat
+import com.google.android.gms.maps.model.BitmapDescriptor
+
+// Utility function to create custom bitmap descriptor from drawable resource
+fun bitmapDescriptorFromVector(context: Context, vectorResId: Int, width: Int = 160, height: Int = 160): BitmapDescriptor? {
+    return try {
+        val vectorDrawable = ContextCompat.getDrawable(context, vectorResId)
+        vectorDrawable?.let { drawable ->
+            drawable.setBounds(0, 0, width, height)
+            val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+            val canvas = Canvas(bitmap)
+            drawable.draw(canvas)
+            BitmapDescriptorFactory.fromBitmap(bitmap)
+        }
+    } catch (e: Exception) {
+        null
+    }
+}
 
 @SuppressLint("MissingPermission")
 suspend fun getCurrentLocation(context: Context): LatLng? {
@@ -64,11 +89,21 @@ suspend fun getCurrentLocation(context: Context): LatLng? {
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
 fun GoogleMapScreen(
-    onBackPressed: (() -> Unit)? = null
+    onBackPressed: (() -> Unit)? = null,
+    viewModel: MapViewModel = viewModel()
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     val configuration = LocalConfiguration.current
+    
+    // Collect state from ViewModel
+    val busStops by viewModel.busStops.collectAsState()
+    val selectedBusStop by viewModel.selectedBusStop.collectAsState()
+    val isLoading by viewModel.isLoading.collectAsState()
+    val error by viewModel.error.collectAsState()
+    val isSearchCardExpanded by viewModel.isSearchCardExpanded.collectAsState()
+    val isSearchCardMinimized by viewModel.isSearchCardMinimized.collectAsState()
+    val userLocationFromViewModel by viewModel.userLocation.collectAsState()
     
     // Location permission
     val locationPermissionState = rememberPermissionState(
@@ -83,9 +118,7 @@ fun GoogleMapScreen(
     val defaultLocation = LatLng(12.9716, 77.5946)
     val currentLocation = userLocation ?: defaultLocation
     
-    // Search card states
-    var isSearchCardExpanded by rememberSaveable { mutableStateOf(false) }
-    var isSearchCardMinimized by rememberSaveable { mutableStateOf(false) }
+    // Use ViewModel states instead of local states
     
     // Detect keyboard state
     val imeInsets = WindowInsets.ime
@@ -121,11 +154,17 @@ fun GoogleMapScreen(
     
     // Handle back button behavior
     BackHandler(
-        enabled = isSearchCardExpanded || isSearchCardMinimized
+        enabled = isSearchCardExpanded || isSearchCardMinimized || busStops.isNotEmpty()
     ) {
         when {
-            isSearchCardExpanded -> isSearchCardExpanded = false
-            isSearchCardMinimized -> isSearchCardMinimized = false
+            // If there are bus stops visible, clear them first
+            busStops.isNotEmpty() -> {
+                viewModel.clearBusStops()
+                viewModel.setSearchCardExpanded(false)
+            }
+            // Then handle search card states
+            isSearchCardExpanded -> viewModel.setSearchCardExpanded(false)
+            isSearchCardMinimized -> viewModel.setSearchCardMinimized(false)
         }
     }
     
@@ -137,8 +176,9 @@ fun GoogleMapScreen(
             userLocation = location
             isLocationLoading = false
             
-            // Update camera position to user location
+            // Update ViewModel with user location
             location?.let {
+                viewModel.updateUserLocation(it)
                 cameraPositionState.animate(
                     CameraUpdateFactory.newCameraPosition(
                         CameraPosition.Builder()
@@ -216,7 +256,45 @@ fun GoogleMapScreen(
                 bottom = mapBottomPadding // Dynamically adjust for search card
             )
         ) {
-            // Map markers will be added here when real data is integrated
+            // Bus stop markers with custom pins
+            busStops.forEach { busStop ->
+                val customIcon = if (selectedBusStop?.id == busStop.id) {
+                    // Use yellow pin for selected bus stop
+                    bitmapDescriptorFromVector(context, R.drawable.bus_stop_yellow, 160, 160)
+                } else {
+                    // Use red pin for unselected bus stops
+                    bitmapDescriptorFromVector(context, R.drawable.bus_stop_red, 160, 160)
+                }
+                
+                Marker(
+                    state = MarkerState(position = busStop.location),
+                    title = busStop.name,
+                    snippet = busStop.vicinity,
+                    icon = customIcon ?: BitmapDescriptorFactory.defaultMarker(
+                        if (selectedBusStop?.id == busStop.id) {
+                            BitmapDescriptorFactory.HUE_YELLOW // Fallback to yellow for selected
+                        } else {
+                            BitmapDescriptorFactory.HUE_RED // Fallback to red for unselected
+                        }
+                    ),
+                    onClick = {
+                        viewModel.selectBusStop(busStop)
+                        // Animate camera to selected bus stop
+                        coroutineScope.launch {
+                            cameraPositionState.animate(
+                                CameraUpdateFactory.newCameraPosition(
+                                    CameraPosition.Builder()
+                                        .target(busStop.location)
+                                        .zoom(16f)
+                                        .build()
+                                ),
+                                1000
+                            )
+                        }
+                        true // Consume the click event
+                    }
+                )
+            }
         }
         
         // Top controls
@@ -282,6 +360,43 @@ fun GoogleMapScreen(
             )
         }
         
+        // Error display
+        error?.let { errorMessage ->
+            Card(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .fillMaxWidth()
+                    .padding(16.dp)
+                    .padding(top = 60.dp), // Account for status bar and back button
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.errorContainer
+                )
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = errorMessage,
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.weight(1f)
+                    )
+                    
+                    TextButton(
+                        onClick = { viewModel.clearError() }
+                    ) {
+                        Text(
+                            text = "Dismiss",
+                            color = MaterialTheme.colorScheme.onErrorContainer
+                        )
+                    }
+                }
+            }
+        }
+
         // Bottom search interface
         SearchCard(
             modifier = Modifier
@@ -289,10 +404,48 @@ fun GoogleMapScreen(
                 .fillMaxWidth(),
             isExpanded = isSearchCardExpanded,
             isMinimized = isSearchCardMinimized,
-            onExpandedChange = { isSearchCardExpanded = it },
-            onMinimizedChange = { isSearchCardMinimized = it },
-            onSearchClick = { isSearchCardExpanded = true },
-            onFavoritesClick = { /* Handle favorites click */ }
+            onExpandedChange = { viewModel.setSearchCardExpanded(it) },
+            onMinimizedChange = { viewModel.setSearchCardMinimized(it) },
+            onSearchClick = { viewModel.setSearchCardExpanded(true) },
+            onFavoritesClick = { /* Handle favorites click */ },
+            onNearbyClick = {
+                // Search for nearby bus stops using current location
+                userLocation?.let { location ->
+                    viewModel.searchNearbyBusStops(location)
+                } ?: run {
+                    // If no location, try to get it first
+                    if (locationPermissionState.status.isGranted) {
+                        coroutineScope.launch {
+                            val location = getCurrentLocation(context)
+                            location?.let {
+                                userLocation = it
+                                viewModel.updateUserLocation(it)
+                                viewModel.searchNearbyBusStops(it)
+                            }
+                        }
+                    } else {
+                        locationPermissionState.launchPermissionRequest()
+                    }
+                }
+            },
+            onBusStopSelected = { busStop ->
+                viewModel.selectBusStop(busStop)
+                // Animate camera to selected bus stop
+                coroutineScope.launch {
+                    cameraPositionState.animate(
+                        CameraUpdateFactory.newCameraPosition(
+                            CameraPosition.Builder()
+                                .target(busStop.location)
+                                .zoom(16f)
+                                .build()
+                        ),
+                        1000
+                    )
+                }
+            },
+            busStops = busStops,
+            isLoadingBusStops = isLoading,
+            userLocation = userLocation
         )
     }
     

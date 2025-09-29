@@ -63,7 +63,7 @@ fun SearchCard(
     onPlaceSelected: (PlaceSearchResult) -> Unit = {},
     busStops: List<BusStop> = emptyList(),
     isLoadingBusStops: Boolean = false,
-    onBusStopSelected: (BusStop) -> Unit = {},
+    onBusStopSelected: (BusStop?) -> Unit = {},
     userLocation: LatLng? = null,
     selectedBusStop: BusStop? = null,
     isMinimized: Boolean = false,
@@ -361,6 +361,8 @@ fun SearchCard(
                         onBackClick = {
                             showingBusStopDetails = false
                             showingBusStops = true
+                            // Clear selected bus stop when going back
+                            onBusStopSelected(null)
                         }
                     )
                 } else if (showingBusStops) {
@@ -442,6 +444,8 @@ fun SearchCard(
                                     onClick = {
                                         showingBusStops = false
                                         searchQuery = ""
+                                        // Clear selected bus stop when going back
+                                        onBusStopSelected(null)
                                     }
                                 ) {
                                     Text("Back to Search")
@@ -489,6 +493,8 @@ fun SearchCard(
                                         isExpanded = false
                                         searchQuery = ""
                                         searchResults = emptyList()
+                                        // Clear selected bus stop when selecting a place
+                                        onBusStopSelected(null)
                                     }
                                 )
                             }
@@ -933,80 +939,4 @@ private fun BusStopDetailsView(
                         items(busStop.types) { type ->
                             Card(
                                 colors = CardDefaults.cardColors(
-                                    containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
-                                )
-                            ) {
-                                Text(
-                                    text = type.replace("_", " ").lowercase().replaceFirstChar { it.uppercase() },
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                    fontSize = 12.sp,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                            }
-                        }
-                    }
-                }
-                
-                // Rating if available
-                busStop.rating?.let { rating ->
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "Rating:",
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "$rating ⭐",
-                            fontSize = 16.sp,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                    }
-                }
-            }
-        }
-        
-        Spacer(modifier = Modifier.height(16.dp))
-        
-        // Directions button
-        Button(
-            onClick = {
-                userLocation?.let { origin ->
-                    onGetDirections(origin, busStop.location)
-                }
-            },
-            modifier = Modifier.fillMaxWidth(),
-            enabled = userLocation != null, // Only enable if user location is available
-            colors = ButtonDefaults.buttonColors(
-                containerColor = MaterialTheme.colorScheme.primary
-            )
-        ) {
-            Icon(
-                imageVector = Icons.Default.LocationOn,
-                contentDescription = "Get Directions",
-                modifier = Modifier.size(20.dp)
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                text = "Get Walking Directions",
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Medium
-            )
-        }
-        
-        Spacer(modifier = Modifier.height(12.dp))
-        
-        // Action text
-        Text(
-            text = "This bus stop is now marked on the map above",
-            fontSize = 14.sp,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.fillMaxWidth(),
-            textAlign = androidx.compose.ui.text.style.TextAlign.Center
-        )
-    }
-}
+                                    containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.

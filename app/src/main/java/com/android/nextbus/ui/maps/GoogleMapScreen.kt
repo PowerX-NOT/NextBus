@@ -101,17 +101,12 @@ fun GoogleMapScreen(
             userLocation = location
             isLocationLoading = false
             
-            // Update camera position to user location with offset for search card
+            // Update camera position to user location
             location?.let {
-                // Calculate offset to center location in visible area (same as recenter button)
-                val offsetLat = it.latitude - 0.015 // Move up to account for large bottom padding
-                val offsetLng = it.longitude + 0.008 // Move left to account for right padding
-                val adjustedLocation = LatLng(offsetLat, offsetLng)
-                
                 cameraPositionState.animate(
                     CameraUpdateFactory.newCameraPosition(
                         CameraPosition.Builder()
-                            .target(adjustedLocation)
+                            .target(it)
                             .zoom(15f)
                             .bearing(0f) // Reset compass to north
                             .tilt(0f)    // Reset tilt to flat
@@ -139,11 +134,10 @@ fun GoogleMapScreen(
                 zoomControlsEnabled = false,
                 myLocationButtonEnabled = false,
                 mapToolbarEnabled = false,
-                compassEnabled = true
+                compassEnabled = false
             ),
             contentPadding = PaddingValues(
-                top = 600.dp, // Position compass lower, above recenter button
-                start = 337.dp // Keep compass on the right side
+                bottom = 180.dp // Account for search card at bottom
             )
         ) {
             // Map markers will be added here when real data is integrated
@@ -177,18 +171,13 @@ fun GoogleMapScreen(
         FloatingActionButton(
             onClick = {
                 if (locationPermissionState.status.isGranted && userLocation != null) {
-                    // Recenter to user location, accounting for map padding
+                    // Recenter to user location
                     userLocation?.let { location ->
                         coroutineScope.launch {
-                            // Calculate offset to center location in visible area
-                            val offsetLat = location.latitude - 0.015 // Move up to account for large bottom padding
-                            val offsetLng = location.longitude + 0.008 // Move left to account for right padding
-                            val adjustedLocation = LatLng(offsetLat, offsetLng)
-                            
                             cameraPositionState.animate(
                                 CameraUpdateFactory.newCameraPosition(
                                     CameraPosition.Builder()
-                                        .target(adjustedLocation)
+                                        .target(location)
                                         .zoom(15f)
                                         .bearing(0f) // Reset compass to north
                                         .tilt(0f)    // Reset tilt to flat

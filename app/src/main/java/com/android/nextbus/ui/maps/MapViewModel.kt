@@ -75,11 +75,6 @@ class MapViewModel : ViewModel() {
                     onSuccess = { busStops ->
                         _busStops.value = busStops
                         Log.d(TAG, "Successfully loaded ${busStops.size} bus stops")
-                        
-                        // Expand search card to show results
-                        if (busStops.isNotEmpty()) {
-                            _isSearchCardExpanded.value = true
-                        }
                     },
                     onFailure = { exception ->
                         _error.value = "Failed to load nearby bus stops: ${exception.message}"

@@ -409,7 +409,10 @@ fun GoogleMapScreen(
             onSearchClick = { viewModel.setSearchCardExpanded(true) },
             onFavoritesClick = { /* Handle favorites click */ },
             onNearbyClick = {
-                // Search for nearby bus stops using current location
+                // Immediately expand the search card for responsive UI
+                viewModel.setSearchCardExpanded(true)
+                
+                // Then search for nearby bus stops using current location
                 userLocation?.let { location ->
                     viewModel.searchNearbyBusStops(location)
                 } ?: run {

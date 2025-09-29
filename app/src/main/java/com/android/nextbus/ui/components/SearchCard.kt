@@ -66,9 +66,9 @@ fun SearchCard(
     val screenHeight = configuration.screenHeightDp.dp
     val context = LocalContext.current
     
-    // Animation for expansion - 95% of screen height when expanded
+    // Animation for expansion - 50% of screen height when expanded
     val animatedHeight by animateFloatAsState(
-        targetValue = if (isExpanded) screenHeight.value * 0.95f else 160f,
+        targetValue = if (isExpanded) screenHeight.value * 0.5f else 160f,
         animationSpec = tween(durationMillis = 300),
         label = "height_animation"
     )

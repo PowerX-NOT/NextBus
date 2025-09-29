@@ -288,6 +288,8 @@ fun GoogleMapScreen(
                     ),
                     onClick = {
                         viewModel.selectBusStop(busStop)
+                        // Expand search card to show bus stop details
+                        viewModel.setSearchCardExpanded(true)
                         // Animate camera to selected bus stop
                         coroutineScope.launch {
                             cameraPositionState.animate(
@@ -442,6 +444,8 @@ fun GoogleMapScreen(
             },
             onBusStopSelected = { busStop ->
                 viewModel.selectBusStop(busStop)
+                // Expand search card to show bus stop details
+                viewModel.setSearchCardExpanded(true)
                 // Animate camera to selected bus stop
                 coroutineScope.launch {
                     cameraPositionState.animate(

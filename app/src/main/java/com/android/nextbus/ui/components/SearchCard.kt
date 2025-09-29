@@ -65,6 +65,14 @@ fun SearchCard(
     var searchQuery by remember { mutableStateOf("") }
     var searchResults by remember { mutableStateOf<List<PlaceSearchResult>>(emptyList()) }
     var isSearching by remember { mutableStateOf(false) }
+    var recentSearches by remember { mutableStateOf<List<PlaceSearchResult>>(emptyList()) }
+    
+    // Function to add item to recent searches
+    fun addToRecentSearches(item: PlaceSearchResult) {
+        val updatedRecents = listOf(item) + recentSearches.filter { it.name != item.name }
+        recentSearches = updatedRecents.take(5) // Keep only last 5 recent searches
+    }
+    
     val density = LocalDensity.current
     val configuration = LocalConfiguration.current
     val screenHeight = configuration.screenHeightDp.dp
@@ -219,15 +227,18 @@ fun SearchCard(
             // Quick actions - always visible
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 // Favorites button
                 Row(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
+                        .weight(1f)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
                         .clickable { onFavoritesClick() }
-                        .padding(12.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
                 ) {
                     Icon(
                         imageVector = Icons.Default.Favorite,
@@ -246,30 +257,26 @@ fun SearchCard(
                     )
                 }
                 
-                // Recent searches
-                Row(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .clickable { /* Handle recent */ }
-                        .padding(12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "Recent",
-                        color = MaterialTheme.colorScheme.onSurface,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
-                
                 // Nearby stops
                 Row(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
+                        .weight(1f)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
                         .clickable { /* Handle nearby */ }
-                        .padding(12.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
                 ) {
+                    Icon(
+                        imageVector = Icons.Default.LocationOn,
+                        contentDescription = "Nearby",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    
+                    Spacer(modifier = Modifier.width(8.dp))
+                    
                     Text(
                         text = "Nearby",
                         color = MaterialTheme.colorScheme.onSurface,
@@ -321,6 +328,7 @@ fun SearchCard(
                                 SearchResultItem(
                                     result = result,
                                     onClick = {
+                                        addToRecentSearches(result) // Add to recent searches
                                         onPlaceSelected(result)
                                         onExpandedChange(false)
                                         searchQuery = ""
@@ -338,43 +346,46 @@ fun SearchCard(
                         )
                     }
                 } else {
-                    // Search suggestions when no query
-                    Text(
-                        text = "Search Options",
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    
-                    Spacer(modifier = Modifier.height(12.dp))
-                    
-                    // Search categories
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        SearchCategoryItem(
-                            title = "Bus Routes",
-                            description = "Find routes by number or destination",
-                            onClick = {
-                                searchQuery = "Route "
-                            }
+                    // Recent searches when no query
+                    if (recentSearches.isNotEmpty()) {
+                        Text(
+                            text = "Recent",
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                         
-                        SearchCategoryItem(
-                            title = "Bus Stops",
-                            description = "Search for nearby bus stops",
-                            onClick = {
-                                searchQuery = "Bus stop "
-                            }
-                        )
+                        Spacer(modifier = Modifier.height(12.dp))
                         
-                        SearchCategoryItem(
-                            title = "Places",
-                            description = "Find locations and landmarks",
-                            onClick = {
-                                searchQuery = ""
+                        // Recent search items
+                        LazyColumn(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            items(recentSearches) { recent ->
+                                SearchResultItem(
+                                    result = recent,
+                                    onClick = {
+                                        searchQuery = recent.name
+                                        // Optionally trigger search for this recent item
+                                        if (recent.name.isNotBlank()) {
+                                            isSearching = true
+                                            searchPlaces(context, recent.name) { results ->
+                                                searchResults = results
+                                                isSearching = false
+                                            }
+                                        }
+                                    }
+                                )
                             }
+                        }
+                    } else {
+                        // Show message when no recent searches
+                        Text(
+                            text = "No recent searches",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontSize = 16.sp,
+                            modifier = Modifier.padding(16.dp)
                         )
                     }
                 }

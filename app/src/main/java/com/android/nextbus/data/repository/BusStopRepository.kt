@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import java.io.IOException
 import java.util.Properties
+import kotlinx.coroutines.Job
 
 class BusStopRepository(private val context: Context) {
     
@@ -18,6 +19,9 @@ class BusStopRepository(private val context: Context) {
     }
     
     private val placesApiService = PlacesApiService()
+    
+    // Job for managing API calls
+    private var currentSearchJob: Job? = null
     
     // State for bus stops
     private val _busStops = MutableStateFlow<List<BusStop>>(emptyList())
@@ -67,6 +71,9 @@ class BusStopRepository(private val context: Context) {
      * This mimics the exact functionality from bushop app
      */
     suspend fun searchNearbyBusStops(location: LatLng): Result<List<BusStop>> {
+        // Cancel any ongoing search
+        currentSearchJob?.cancel()
+        
         return try {
             _isLoading.value = true
             _error.value = null
@@ -109,6 +116,9 @@ class BusStopRepository(private val context: Context) {
      * This provides broader search results similar to bushop app's approach
      */
     suspend fun searchAllTransitTypes(location: LatLng): Result<List<BusStop>> {
+        // Cancel any ongoing search
+        currentSearchJob?.cancel()
+        
         return try {
             _isLoading.value = true
             _error.value = null
@@ -148,6 +158,7 @@ class BusStopRepository(private val context: Context) {
      * Clear current bus stops and error state
      */
     fun clearBusStops() {
+        currentSearchJob?.cancel()
         _busStops.value = emptyList()
         _error.value = null
     }
@@ -157,6 +168,14 @@ class BusStopRepository(private val context: Context) {
      */
     fun clearError() {
         _error.value = null
+    }
+    
+    /**
+     * Cancel any ongoing operations
+     */
+    fun cancelOperations() {
+        currentSearchJob?.cancel()
+        _isLoading.value = false
     }
     
     /**

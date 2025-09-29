@@ -118,7 +118,9 @@ suspend fun getCurrentLocation(context: Context): LatLng? {
 
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
-fun GoogleMapScreen() {
+fun GoogleMapScreen(
+    onBackPressed: () -> Unit = {}
+) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     val configuration = LocalConfiguration.current
@@ -135,6 +137,33 @@ fun GoogleMapScreen() {
     // val error by mapViewModel.error.collectAsState() // Temporarily commented out
     val directionsResponse by mapViewModel.directionsResponse.collectAsState()
     val isLoadingDirections by mapViewModel.isLoadingDirections.collectAsState()
+    
+    // Navigation state management
+    var navigationStack by remember { mutableStateOf(listOf<String>()) }
+    
+    // Handle back button behavior
+    BackHandler(enabled = navigationStack.isNotEmpty() || selectedBusStop != null || isSearchCardExpanded) {
+        when {
+            selectedBusStop != null -> {
+                // Clear selected bus stop and directions
+                selectedBusStop = null
+                mapViewModel.clearDirections()
+                isSearchCardMinimized = false
+            }
+            isSearchCardExpanded -> {
+                // Collapse search card
+                isSearchCardExpanded = false
+            }
+            navigationStack.isNotEmpty() -> {
+                // Pop from navigation stack
+                navigationStack = navigationStack.dropLast(1)
+            }
+            else -> {
+                // Exit app
+                onBackPressed()
+            }
+        }
+    }
     
     // Debug logging for directions response
     LaunchedEffect(directionsResponse) {
@@ -273,7 +302,28 @@ fun GoogleMapScreen() {
         ) {
             // Back button
             FloatingActionButton(
-                onClick = { /* Handle back navigation */ },
+                onClick = {
+                    when {
+                        selectedBusStop != null -> {
+                            // Clear selected bus stop and directions
+                            selectedBusStop = null
+                            mapViewModel.clearDirections()
+                            isSearchCardMinimized = false
+                        }
+                        isSearchCardExpanded -> {
+                            // Collapse search card
+                            isSearchCardExpanded = false
+                        }
+                        navigationStack.isNotEmpty() -> {
+                            // Pop from navigation stack
+                            navigationStack = navigationStack.dropLast(1)
+                        }
+                        else -> {
+                            // Exit app
+                            onBackPressed()
+                        }
+                    }
+                },
                 modifier = Modifier.size(48.dp),
                 containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
                 contentColor = MaterialTheme.colorScheme.onSurface
@@ -336,6 +386,7 @@ fun GoogleMapScreen() {
             onNearbyClick = {
                 if (locationPermissionState.status.isGranted && userLocation != null) {
                     userLocation?.let { location ->
+                        navigationStack = navigationStack + "nearby_search"
                         mapViewModel.searchNearbyBusStops(location)
                     }
                 } else {
@@ -352,13 +403,20 @@ fun GoogleMapScreen() {
             },
             onExpandedChange = { expanded ->
                 isSearchCardExpanded = expanded
+                if (expanded && !navigationStack.contains("search_expanded")) {
+                    navigationStack = navigationStack + "search_expanded"
+                } else if (!expanded && navigationStack.contains("search_expanded")) {
+                    navigationStack = navigationStack.filter { it != "search_expanded" }
+                }
             },
             onGetDirections = { origin, destination ->
+                navigationStack = navigationStack + "directions"
                 mapViewModel.getWalkingDirections(origin, destination)
             },
             onBusStopSelected = { busStop ->
                 selectedBusStop = busStop
                 isSearchCardMinimized = false // Reset minimize state when new bus stop is selected
+                navigationStack = navigationStack + "bus_stop_details"
                 // Center map on selected bus stop
                 coroutineScope.launch {
                     cameraPositionState.animate(
@@ -381,6 +439,13 @@ fun GoogleMapScreen() {
     LaunchedEffect(Unit) {
         if (!locationPermissionState.status.isGranted) {
             locationPermissionState.launchPermissionRequest()
+        }
+    }
+    
+    // Cleanup when composable is disposed
+    DisposableEffect(Unit) {
+        onDispose {
+            mapViewModel.cleanup()
         }
     }
 }

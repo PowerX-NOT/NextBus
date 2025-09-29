@@ -11,6 +11,7 @@ import com.google.android.gms.maps.model.LatLng
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import android.util.Log
+import kotlinx.coroutines.Job
 
 class MapViewModel(context: Context) : ViewModel() {
     
@@ -20,6 +21,10 @@ class MapViewModel(context: Context) : ViewModel() {
     
     private val repository = BusStopRepository(context)
     private val directionsRepository = DirectionsRepository(context)
+    
+    // Job for managing coroutines
+    private var searchJob: Job? = null
+    private var directionsJob: Job? = null
     
     // Expose repository states
     val busStops: StateFlow<List<BusStop>> = repository.busStops
@@ -54,7 +59,10 @@ class MapViewModel(context: Context) : ViewModel() {
             return
         }
         
-        viewModelScope.launch {
+        // Cancel previous search job
+        searchJob?.cancel()
+        
+        searchJob = viewModelScope.launch {
             try {
                 _isSearching.value = true
                 Log.d(TAG, "Starting search for nearby bus stops at: ${location.latitude}, ${location.longitude}")
@@ -94,7 +102,10 @@ class MapViewModel(context: Context) : ViewModel() {
      * Search for all types of transit stops (broader search)
      */
     fun searchAllTransitTypes(location: LatLng) {
-        viewModelScope.launch {
+        // Cancel previous search job
+        searchJob?.cancel()
+        
+        searchJob = viewModelScope.launch {
             try {
                 _isSearching.value = true
                 Log.d(TAG, "Starting comprehensive transit search at: ${location.latitude}, ${location.longitude}")
@@ -155,7 +166,10 @@ class MapViewModel(context: Context) : ViewModel() {
      * Get walking directions from origin to destination
      */
     fun getWalkingDirections(origin: LatLng, destination: LatLng) {
-        viewModelScope.launch {
+        // Cancel previous directions job
+        directionsJob?.cancel()
+        
+        directionsJob = viewModelScope.launch {
             _isLoadingDirections.value = true
             try {
                 Log.d(TAG, "Getting walking directions from $origin to $destination")
@@ -183,6 +197,24 @@ class MapViewModel(context: Context) : ViewModel() {
      */
     fun clearDirections() {
         _directionsResponse.value = null
+        directionsJob?.cancel()
+    }
+    
+    /**
+     * Cleanup resources
+     */
+    fun cleanup() {
+        searchJob?.cancel()
+        directionsJob?.cancel()
+        repository.clearBusStops()
+        _directionsResponse.value = null
+        lastSearchLocation = null
+        Log.d(TAG, "ViewModel cleaned up")
+    }
+    
+    override fun onCleared() {
+        super.onCleared()
+        cleanup()
     }
     
     /**

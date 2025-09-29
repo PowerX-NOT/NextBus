@@ -29,6 +29,10 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -66,9 +70,17 @@ fun SearchCard(
     val screenHeight = configuration.screenHeightDp.dp
     val context = LocalContext.current
     
-    // Animation for expansion - 50% of screen height when expanded
+    // Detect keyboard state
+    val imeInsets = WindowInsets.ime
+    val isKeyboardVisible = imeInsets.getBottom(density) > 0
+    
+    // Animation for expansion - 95% when keyboard visible, 50% when manually expanded, 160dp when collapsed
     val animatedHeight by animateFloatAsState(
-        targetValue = if (isExpanded) screenHeight.value * 0.5f else 160f,
+        targetValue = when {
+            isKeyboardVisible -> screenHeight.value * 0.95f // 95% when keyboard is visible
+            isExpanded -> screenHeight.value * 0.5f // 50% when manually expanded
+            else -> 160f // Normal collapsed height
+        },
         animationSpec = tween(durationMillis = 300),
         label = "height_animation"
     )

@@ -6,6 +6,8 @@ import android.content.Context
 import android.location.LocationManager
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.animation.core.animateDpAsState
@@ -22,6 +24,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
@@ -84,9 +87,13 @@ fun GoogleMapScreen(
     var isSearchCardExpanded by rememberSaveable { mutableStateOf(false) }
     var isSearchCardMinimized by rememberSaveable { mutableStateOf(false) }
     
-    // Animated bottom padding for recenter button
+    // Detect keyboard state
+    val imeInsets = WindowInsets.ime
+    val isKeyboardVisible = imeInsets.getBottom(LocalDensity.current) > 0
+    
+    // Animated bottom padding for recenter button - only adjust for manual expansion, not keyboard
     val recenterButtonBottomPadding by animateDpAsState(
-        targetValue = if (isSearchCardExpanded) {
+        targetValue = if (isSearchCardExpanded && !isKeyboardVisible) {
             (configuration.screenHeightDp.toFloat() * 0.5f + 20f).dp
         } else {
             170.dp
@@ -95,13 +102,13 @@ fun GoogleMapScreen(
         label = "recenter_button_padding"
     )
     
-    // Animated content padding for map to keep location centered
+    // Animated content padding for map to keep location centered - only adjust for manual expansion, not keyboard
     val mapBottomPadding by animateDpAsState(
-        targetValue = if (isSearchCardExpanded) {
-            // When expanded, add padding equal to 50% of screen height
+        targetValue = if (isSearchCardExpanded && !isKeyboardVisible) {
+            // When manually expanded, add padding equal to 50% of screen height
             (configuration.screenHeightDp.toFloat() * 0.5f).dp
         } else {
-            // When collapsed, use normal padding for search card
+            // When collapsed or keyboard visible, use normal padding for search card
             180.dp
         },
         animationSpec = tween(durationMillis = 300),
@@ -149,8 +156,10 @@ fun GoogleMapScreen(
         }
     }
     
-    // Adjust camera when search card expands/collapses to account for padding changes
-    LaunchedEffect(isSearchCardExpanded) {
+    // Adjust camera when search card expands/collapses to account for padding changes (only for manual expansion, not keyboard)
+    LaunchedEffect(isSearchCardExpanded, isKeyboardVisible) {
+        // Only adjust camera for manual expansion, not when keyboard appears
+        if (isKeyboardVisible) return@LaunchedEffect
         // Small delay to let the padding animation start
         delay(50)
         

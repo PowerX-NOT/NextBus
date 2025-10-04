@@ -10,7 +10,16 @@ data class BusStop(
     val reference: String? = null,
     val placeId: String? = null,
     val rating: Double? = null,
-    val types: List<String> = emptyList()
+    val types: List<String> = emptyList(),
+    val routes: List<BusRoute> = emptyList()
+)
+
+data class BusRoute(
+    val routeNumber: String,
+    val routeName: String? = null,
+    val agency: String? = null,
+    val color: String? = null,
+    val textColor: String? = null
 )
 
 data class PlacesApiResponse(

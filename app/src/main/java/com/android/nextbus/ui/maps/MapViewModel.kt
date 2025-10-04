@@ -19,6 +19,7 @@ class MapViewModel : ViewModel() {
     }
     
     private val nearbyBusStopService = NearbyBusStopService()
+    private val googleRoutesService = com.android.nextbus.data.network.GoogleRoutesService()
     
     // State for bus stops
     private val _busStops = MutableStateFlow<List<BusStop>>(emptyList())
@@ -75,6 +76,8 @@ class MapViewModel : ViewModel() {
                     onSuccess = { busStops ->
                         _busStops.value = busStops
                         Log.d(TAG, "Successfully loaded ${busStops.size} bus stops")
+
+                        fetchRoutesForBusStops(busStops)
                     },
                     onFailure = { exception ->
                         _error.value = "Failed to load nearby bus stops: ${exception.message}"
@@ -138,7 +141,40 @@ class MapViewModel : ViewModel() {
         return results[0]
     }
     
-    // Sample bus stops for testing (can be removed once API is working)
+    private fun fetchRoutesForBusStops(busStops: List<BusStop>) {
+        viewModelScope.launch {
+            Log.d(TAG, "Starting to fetch routes for ${busStops.size} bus stops")
+
+            val updatedBusStops = busStops.map { busStop ->
+                try {
+                    val routesResult = googleRoutesService.getTransitRoutesForStation(busStop.location)
+
+                    routesResult.fold(
+                        onSuccess = { routes ->
+                            if (routes.isNotEmpty()) {
+                                Log.d(TAG, "Found ${routes.size} routes for ${busStop.name}")
+                                busStop.copy(routes = routes)
+                            } else {
+                                Log.d(TAG, "No routes found for ${busStop.name}")
+                                busStop
+                            }
+                        },
+                        onFailure = { exception ->
+                            Log.e(TAG, "Error fetching routes for ${busStop.name}: ${exception.message}")
+                            busStop
+                        }
+                    )
+                } catch (e: Exception) {
+                    Log.e(TAG, "Exception fetching routes for ${busStop.name}: ${e.message}")
+                    busStop
+                }
+            }
+
+            _busStops.value = updatedBusStops
+            Log.d(TAG, "Finished updating bus stops with route information")
+        }
+    }
+
     fun loadSampleBusStops() {
         val sampleBusStops = listOf(
             BusStop(
@@ -148,7 +184,7 @@ class MapViewModel : ViewModel() {
                 location = LatLng(12.9767, 77.5713)
             ),
             BusStop(
-                id = "sample_2", 
+                id = "sample_2",
                 name = "Vidhana Soudha",
                 vicinity = "Vidhana Soudha, Bangalore",
                 location = LatLng(12.9794, 77.5912)
@@ -156,7 +192,7 @@ class MapViewModel : ViewModel() {
             BusStop(
                 id = "sample_3",
                 name = "Cubbon Park",
-                vicinity = "Cubbon Park, Bangalore", 
+                vicinity = "Cubbon Park, Bangalore",
                 location = LatLng(12.9698, 77.5906)
             )
         )

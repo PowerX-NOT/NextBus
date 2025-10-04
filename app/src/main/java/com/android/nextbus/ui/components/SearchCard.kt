@@ -10,6 +10,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -407,12 +408,42 @@ fun SearchCard(
                             )
                         }
                         
+                        // Bus Routes Section
+                        if (selectedBusStop.routes.isNotEmpty()) {
+                            Text(
+                                text = "Bus Routes (${selectedBusStop.routes.size})",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(vertical = 8.dp)
+                            )
+
+                            androidx.compose.foundation.layout.FlowRow(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                selectedBusStop.routes.forEach { route ->
+                                    BusRouteChip(route = route)
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(16.dp))
+                        } else {
+                            Text(
+                                text = "Loading route information...",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(vertical = 8.dp)
+                            )
+                        }
+
                         // Types/Categories
                         if (selectedBusStop.types.isNotEmpty()) {
                             Text(
-                                text = selectedBusStop.types.joinToString(", ") { 
-                                    it.replace("_", " ").replaceFirstChar { char -> 
-                                        if (char.isLowerCase()) char.titlecase() else char.toString() 
+                                text = selectedBusStop.types.joinToString(", ") {
+                                    it.replace("_", " ").replaceFirstChar { char ->
+                                        if (char.isLowerCase()) char.titlecase() else char.toString()
                                     }
                                 },
                                 style = MaterialTheme.typography.bodySmall,
@@ -420,7 +451,7 @@ fun SearchCard(
                                 modifier = Modifier.padding(bottom = 16.dp)
                             )
                         }
-                        
+
                         // Location coordinates
                         Text(
                             text = "Location: ${String.format("%.6f", selectedBusStop.location.latitude)}, ${String.format("%.6f", selectedBusStop.location.longitude)}",
@@ -666,17 +697,40 @@ private fun BusStopResultItem(
             // Show bus stop types
             if (busStop.types.isNotEmpty()) {
                 Text(
-                    text = busStop.types.joinToString(", ") { 
-                        it.replace("_", " ").replaceFirstChar { char -> 
-                            if (char.isLowerCase()) char.titlecase() else char.toString() 
-                        } 
+                    text = busStop.types.joinToString(", ") {
+                        it.replace("_", " ").replaceFirstChar { char ->
+                            if (char.isLowerCase()) char.titlecase() else char.toString()
+                        }
                     },
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 12.sp
                 )
             }
+
+            // Show bus routes if available
+            if (busStop.routes.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(4.dp))
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    busStop.routes.take(5).forEach { route ->
+                        BusRouteChip(route = route)
+                    }
+                    if (busStop.routes.size > 5) {
+                        Text(
+                            text = "+${busStop.routes.size - 5}",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium,
+                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 6.dp)
+                        )
+                    }
+                }
+            }
         }
-        
+
         // Show rating if available
         busStop.rating?.let { rating ->
             Column(
@@ -684,7 +738,7 @@ private fun BusStopResultItem(
             ) {
                 Text(
                     text = "★",
-                    color = Color(0xFFFFD700), // Gold color
+                    color = Color(0xFFFFD700),
                     fontSize = 16.sp
                 )
                 Text(
@@ -708,7 +762,52 @@ private fun calculateDistance(point1: com.google.android.gms.maps.model.LatLng, 
     return results[0]
 }
 
-// Function to search places using Google Places API
+@Composable
+private fun BusRouteChip(
+    route: com.android.nextbus.data.model.BusRoute,
+    modifier: Modifier = Modifier
+) {
+    val backgroundColor = if (!route.color.isNullOrEmpty()) {
+        try {
+            Color(android.graphics.Color.parseColor("#${route.color}"))
+        } catch (e: Exception) {
+            MaterialTheme.colorScheme.primary
+        }
+    } else {
+        MaterialTheme.colorScheme.primary
+    }
+
+    val textColor = if (!route.textColor.isNullOrEmpty()) {
+        try {
+            Color(android.graphics.Color.parseColor("#${route.textColor}"))
+        } catch (e: Exception) {
+            MaterialTheme.colorScheme.onPrimary
+        }
+    } else {
+        MaterialTheme.colorScheme.onPrimary
+    }
+
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(16.dp),
+        color = backgroundColor,
+        tonalElevation = 2.dp
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
+        ) {
+            Text(
+                text = route.routeNumber,
+                color = textColor,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold
+            )
+        }
+    }
+}
+
 private fun searchPlaces(
     context: Context,
     query: String,

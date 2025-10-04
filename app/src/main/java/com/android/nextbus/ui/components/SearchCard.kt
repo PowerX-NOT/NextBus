@@ -418,16 +418,33 @@ fun SearchCard(
                                 modifier = Modifier.padding(vertical = 8.dp)
                             )
 
-                            LazyRow(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                items(selectedBusStop.routes) { route ->
-                                    BusRouteChip(route = route)
+                            // Group routes by agency for better organization
+                            val routesByAgency = selectedBusStop.routes.groupBy { it.agency ?: "Other" }
+                            
+                            routesByAgency.forEach { (agency, routes) ->
+                                if (routesByAgency.size > 1) {
+                                    Text(
+                                        text = agency,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        fontWeight = FontWeight.Medium,
+                                        modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
+                                    )
                                 }
+                                
+                                LazyRow(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    items(routes.sortedBy { it.routeNumber }) { route ->
+                                        BusRouteChip(route = route)
+                                    }
+                                }
+                                
+                                Spacer(modifier = Modifier.height(8.dp))
                             }
 
-                            Spacer(modifier = Modifier.height(16.dp))
+                            Spacer(modifier = Modifier.height(8.dp))
                         } else if (selectedBusStop.isLoadingRoutes) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
@@ -439,18 +456,30 @@ fun SearchCard(
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
-                                    text = "Loading route information...",
+                                    text = "Loading comprehensive route information...",
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
                         } else {
-                            Text(
-                                text = "No route information available",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(vertical = 8.dp)
-                            )
+                            Column {
+                                Text(
+                                    text = "No route information available",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(vertical = 8.dp)
+                                )
+                                
+                                // Add refresh button
+                                TextButton(
+                                    onClick = {
+                                        // Trigger route refresh - you'll need to pass this callback
+                                        // onRefreshRoutes?.invoke(selectedBusStop)
+                                    }
+                                ) {
+                                    Text("Try Again")
+                                }
+                            }
                         }
 
                         // Types/Categories

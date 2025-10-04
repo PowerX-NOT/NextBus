@@ -145,7 +145,7 @@ class MapViewModel : ViewModel() {
     private fun fetchRoutesForSelectedBusStop(busStop: BusStop) {
         viewModelScope.launch {
             try {
-                Log.d(TAG, "Fetching fresh routes for selected bus stop: ${busStop.name}")
+                Log.d(TAG, "Fetching comprehensive routes for selected bus stop: ${busStop.name}")
                 
                 // Clear existing routes and set loading state
                 val updatedBusStop = busStop.copy(routes = emptyList(), isLoadingRoutes = true)
@@ -157,11 +157,18 @@ class MapViewModel : ViewModel() {
                 }
                 _busStops.value = updatedBusStops
                 
+                // Use comprehensive route fetching
                 val routesResult = googleRoutesService.getTransitRoutesForStation(busStop.location)
                 
                 routesResult.fold(
                     onSuccess = { routes ->
-                        Log.d(TAG, "Found ${routes.size} routes for ${busStop.name}")
+                        Log.d(TAG, "Found ${routes.size} comprehensive routes for ${busStop.name}")
+                        
+                        // Log route details for debugging
+                        routes.forEach { route ->
+                            Log.d(TAG, "Route: ${route.routeNumber} - ${route.routeName} (${route.agency})")
+                        }
+                        
                         val busStopWithRoutes = busStop.copy(routes = routes, isLoadingRoutes = false)
                         
                         // Update selected bus stop
@@ -174,7 +181,7 @@ class MapViewModel : ViewModel() {
                         _busStops.value = finalUpdatedBusStops
                     },
                     onFailure = { exception ->
-                        Log.e(TAG, "Error fetching routes for ${busStop.name}: ${exception.message}")
+                        Log.e(TAG, "Error fetching comprehensive routes for ${busStop.name}: ${exception.message}")
                         val busStopWithError = busStop.copy(isLoadingRoutes = false)
                         
                         _selectedBusStop.value = busStopWithError
@@ -186,7 +193,7 @@ class MapViewModel : ViewModel() {
                     }
                 )
             } catch (e: Exception) {
-                Log.e(TAG, "Exception fetching routes for ${busStop.name}: ${e.message}")
+                Log.e(TAG, "Exception fetching comprehensive routes for ${busStop.name}: ${e.message}")
                 val busStopWithError = busStop.copy(isLoadingRoutes = false)
                 _selectedBusStop.value = busStopWithError
                 
@@ -196,6 +203,11 @@ class MapViewModel : ViewModel() {
                 _busStops.value = finalUpdatedBusStops
             }
         }
+    }
+    
+    // Add method to refresh routes for a bus stop
+    fun refreshRoutesForBusStop(busStop: BusStop) {
+        fetchRoutesForSelectedBusStop(busStop)
     }
 
 }

@@ -10,7 +10,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -418,12 +418,11 @@ fun SearchCard(
                                 modifier = Modifier.padding(vertical = 8.dp)
                             )
 
-                            androidx.compose.foundation.layout.FlowRow(
+                            LazyRow(
                                 modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                selectedBusStop.routes.forEach { route ->
+                                items(selectedBusStop.routes) { route ->
                                     BusRouteChip(route = route)
                                 }
                             }
@@ -710,22 +709,23 @@ private fun BusStopResultItem(
             // Show bus routes if available
             if (busStop.routes.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(4.dp))
-                FlowRow(
+                LazyRow(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    busStop.routes.take(5).forEach { route ->
+                    items(busStop.routes.take(5)) { route ->
                         BusRouteChip(route = route)
                     }
                     if (busStop.routes.size > 5) {
-                        Text(
-                            text = "+${busStop.routes.size - 5}",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Medium,
-                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 6.dp)
-                        )
+                        item {
+                            Text(
+                                text = "+${busStop.routes.size - 5}",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Medium,
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 6.dp)
+                            )
+                        }
                     }
                 }
             }

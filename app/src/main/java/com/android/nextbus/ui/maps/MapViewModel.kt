@@ -76,8 +76,6 @@ class MapViewModel : ViewModel() {
                     onSuccess = { busStops ->
                         _busStops.value = busStops
                         Log.d(TAG, "Successfully loaded ${busStops.size} bus stops")
-
-                        fetchRoutesForBusStops(busStops)
                     },
                     onFailure = { exception ->
                         _error.value = "Failed to load nearby bus stops: ${exception.message}"
@@ -96,6 +94,9 @@ class MapViewModel : ViewModel() {
     fun selectBusStop(busStop: BusStop) {
         _selectedBusStop.value = busStop
         Log.d(TAG, "Selected bus stop: ${busStop.name}")
+        
+        // Always fetch fresh routes for the selected bus stop
+        fetchRoutesForSelectedBusStop(busStop)
     }
     
     fun clearSelectedBusStop() {
@@ -141,37 +142,59 @@ class MapViewModel : ViewModel() {
         return results[0]
     }
     
-    private fun fetchRoutesForBusStops(busStops: List<BusStop>) {
+    private fun fetchRoutesForSelectedBusStop(busStop: BusStop) {
         viewModelScope.launch {
-            Log.d(TAG, "Starting to fetch routes for ${busStops.size} bus stops")
-
-            val updatedBusStops = busStops.map { busStop ->
-                try {
-                    val routesResult = googleRoutesService.getTransitRoutesForStation(busStop.location)
-
-                    routesResult.fold(
-                        onSuccess = { routes ->
-                            if (routes.isNotEmpty()) {
-                                Log.d(TAG, "Found ${routes.size} routes for ${busStop.name}")
-                                busStop.copy(routes = routes)
-                            } else {
-                                Log.d(TAG, "No routes found for ${busStop.name}")
-                                busStop
-                            }
-                        },
-                        onFailure = { exception ->
-                            Log.e(TAG, "Error fetching routes for ${busStop.name}: ${exception.message}")
-                            busStop
-                        }
-                    )
-                } catch (e: Exception) {
-                    Log.e(TAG, "Exception fetching routes for ${busStop.name}: ${e.message}")
-                    busStop
+            try {
+                Log.d(TAG, "Fetching fresh routes for selected bus stop: ${busStop.name}")
+                
+                // Clear existing routes and set loading state
+                val updatedBusStop = busStop.copy(routes = emptyList(), isLoadingRoutes = true)
+                _selectedBusStop.value = updatedBusStop
+                
+                // Also update the bus stop in the main list
+                val updatedBusStops = _busStops.value.map { 
+                    if (it.id == busStop.id) updatedBusStop else it 
                 }
+                _busStops.value = updatedBusStops
+                
+                val routesResult = googleRoutesService.getTransitRoutesForStation(busStop.location)
+                
+                routesResult.fold(
+                    onSuccess = { routes ->
+                        Log.d(TAG, "Found ${routes.size} routes for ${busStop.name}")
+                        val busStopWithRoutes = busStop.copy(routes = routes, isLoadingRoutes = false)
+                        
+                        // Update selected bus stop
+                        _selectedBusStop.value = busStopWithRoutes
+                        
+                        // Update bus stop in the main list
+                        val finalUpdatedBusStops = _busStops.value.map { 
+                            if (it.id == busStop.id) busStopWithRoutes else it 
+                        }
+                        _busStops.value = finalUpdatedBusStops
+                    },
+                    onFailure = { exception ->
+                        Log.e(TAG, "Error fetching routes for ${busStop.name}: ${exception.message}")
+                        val busStopWithError = busStop.copy(isLoadingRoutes = false)
+                        
+                        _selectedBusStop.value = busStopWithError
+                        
+                        val finalUpdatedBusStops = _busStops.value.map { 
+                            if (it.id == busStop.id) busStopWithError else it 
+                        }
+                        _busStops.value = finalUpdatedBusStops
+                    }
+                )
+            } catch (e: Exception) {
+                Log.e(TAG, "Exception fetching routes for ${busStop.name}: ${e.message}")
+                val busStopWithError = busStop.copy(isLoadingRoutes = false)
+                _selectedBusStop.value = busStopWithError
+                
+                val finalUpdatedBusStops = _busStops.value.map { 
+                    if (it.id == busStop.id) busStopWithError else it 
+                }
+                _busStops.value = finalUpdatedBusStops
             }
-
-            _busStops.value = updatedBusStops
-            Log.d(TAG, "Finished updating bus stops with route information")
         }
     }
 

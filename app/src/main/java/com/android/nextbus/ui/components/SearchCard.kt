@@ -428,9 +428,25 @@ fun SearchCard(
                             }
 
                             Spacer(modifier = Modifier.height(16.dp))
+                        } else if (selectedBusStop.isLoadingRoutes) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(vertical = 8.dp)
+                            ) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(16.dp),
+                                    strokeWidth = 2.dp
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "Loading route information...",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                         } else {
                             Text(
-                                text = "Loading route information...",
+                                text = "No route information available",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.padding(vertical = 8.dp)
@@ -704,30 +720,6 @@ private fun BusStopResultItem(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 12.sp
                 )
-            }
-
-            // Show bus routes if available
-            if (busStop.routes.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(4.dp))
-                LazyRow(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    items(busStop.routes.take(5)) { route ->
-                        BusRouteChip(route = route)
-                    }
-                    if (busStop.routes.size > 5) {
-                        item {
-                            Text(
-                                text = "+${busStop.routes.size - 5}",
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Medium,
-                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 6.dp)
-                            )
-                        }
-                    }
-                }
             }
         }
 

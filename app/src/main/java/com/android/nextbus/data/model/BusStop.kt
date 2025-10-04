@@ -11,7 +11,8 @@ data class BusStop(
     val placeId: String? = null,
     val rating: Double? = null,
     val types: List<String> = emptyList(),
-    val routes: List<BusRoute> = emptyList()
+    val routes: List<BusRoute> = emptyList(),
+    val isLoadingRoutes: Boolean = false
 )
 
 data class BusRoute(

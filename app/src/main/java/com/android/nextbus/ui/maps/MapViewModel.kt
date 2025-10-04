@@ -175,27 +175,4 @@ class MapViewModel : ViewModel() {
         }
     }
 
-    fun loadSampleBusStops() {
-        val sampleBusStops = listOf(
-            BusStop(
-                id = "sample_1",
-                name = "Majestic Bus Station",
-                vicinity = "Majestic, Bangalore",
-                location = LatLng(12.9767, 77.5713)
-            ),
-            BusStop(
-                id = "sample_2",
-                name = "Vidhana Soudha",
-                vicinity = "Vidhana Soudha, Bangalore",
-                location = LatLng(12.9794, 77.5912)
-            ),
-            BusStop(
-                id = "sample_3",
-                name = "Cubbon Park",
-                vicinity = "Cubbon Park, Bangalore",
-                location = LatLng(12.9698, 77.5906)
-            )
-        )
-        _busStops.value = sampleBusStops
-    }
 }

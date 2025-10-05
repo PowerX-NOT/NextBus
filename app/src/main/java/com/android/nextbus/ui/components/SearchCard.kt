@@ -648,19 +648,31 @@ private fun BusStopResultItem(
                 )
             }
             
-            // Show distance if user location is available
+            // Show distance using GPS calculation (more accurate than BMTC API data)
             userLocation?.let { userLoc ->
                 val distance = calculateDistance(userLoc, busStop.location)
                 val distanceText = if (distance < 1000) {
                     "${distance.toInt()} m away"
                 } else {
-                    "${String.format("%.0f", distance / 1000)} km away"
+                    "${String.format("%.1f", distance / 1000)} km away"
                 }
                 Text(
                     text = distanceText,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontSize = 12.sp
+                    color = MaterialTheme.colorScheme.primary,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium
                 )
+            }
+            
+            // Show towards direction if available
+            busStop.towards?.let { towards ->
+                if (towards.isNotBlank()) {
+                    Text(
+                        text = "Towards $towards",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = 12.sp
+                    )
+                }
             }
             
             // Show bus stop types

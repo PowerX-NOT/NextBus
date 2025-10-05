@@ -10,7 +10,9 @@ data class BusStop(
     val reference: String? = null,
     val placeId: String? = null,
     val rating: Double? = null,
-    val types: List<String> = emptyList()
+    val types: List<String> = emptyList(),
+    val distance: Double = 0.0, // Distance from user location in meters
+    val towards: String? = null // Direction/towards information from BMTC
 )
 
 data class PlacesApiResponse(

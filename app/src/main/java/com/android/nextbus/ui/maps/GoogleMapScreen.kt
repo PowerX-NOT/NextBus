@@ -53,6 +53,8 @@ import android.graphics.Canvas
 import android.graphics.drawable.Drawable
 import androidx.core.content.ContextCompat
 import com.google.android.gms.maps.model.BitmapDescriptor
+import com.google.maps.android.PolyUtil
+import android.util.Log
 
 // Utility function to create custom bitmap descriptor from drawable resource
 fun bitmapDescriptorFromVector(context: Context, vectorResId: Int, width: Int = 160, height: Int = 160): BitmapDescriptor? {
@@ -104,6 +106,10 @@ fun GoogleMapScreen(
     val isSearchCardExpanded by viewModel.isSearchCardExpanded.collectAsState()
     val isSearchCardMinimized by viewModel.isSearchCardMinimized.collectAsState()
     val userLocationFromViewModel by viewModel.userLocation.collectAsState()
+    val selectedPlace by viewModel.selectedPlace.collectAsState()
+    val selectedPlaceName by viewModel.selectedPlaceName.collectAsState()
+    val directionsResponse by viewModel.directionsResponse.collectAsState()
+    val isLoadingDirections by viewModel.isLoadingDirections.collectAsState()
     
     // Location permission
     val locationPermissionState = rememberPermissionState(
@@ -154,10 +160,14 @@ fun GoogleMapScreen(
     
     // Handle back button behavior
     BackHandler(
-        enabled = isSearchCardExpanded || isSearchCardMinimized || busStops.isNotEmpty() || selectedBusStop != null
+        enabled = isSearchCardExpanded || isSearchCardMinimized || busStops.isNotEmpty() || selectedBusStop != null || selectedPlace != null
     ) {
         when {
-            // If a bus stop is selected, clear selection first
+            // If a place is selected, clear it first
+            selectedPlace != null -> {
+                viewModel.clearSelectedPlace()
+            }
+            // If a bus stop is selected, clear selection
             selectedBusStop != null -> {
                 viewModel.clearSelectedBusStop()
             }
@@ -306,6 +316,47 @@ fun GoogleMapScreen(
                     }
                 )
             }
+            
+            // Destination marker for selected place
+            selectedPlace?.let { destination ->
+                Marker(
+                    state = MarkerState(position = destination),
+                    title = selectedPlaceName ?: "Destination",
+                    icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN)
+                )
+            }
+            
+            // Draw route polylines
+            directionsResponse?.routes?.firstOrNull()?.let { route ->
+                Log.d("GoogleMapScreen", "Rendering route with polyline: ${route.polyline != null}")
+                // Draw main route polyline
+                route.polyline?.encodedPolyline?.let { encodedPolyline ->
+                    Log.d("GoogleMapScreen", "Decoding polyline: ${encodedPolyline.take(50)}...")
+                    // Decode polyline outside composable to avoid try-catch issues
+                    val points = remember(encodedPolyline) {
+                        try {
+                            val decoded = PolyUtil.decode(encodedPolyline)
+                            Log.d("GoogleMapScreen", "Decoded ${decoded.size} points")
+                            decoded
+                        } catch (e: Exception) {
+                            Log.e("GoogleMapScreen", "Error decoding polyline: ${e.message}")
+                            emptyList()
+                        }
+                    }
+                    
+                    if (points.isNotEmpty()) {
+                        Log.d("GoogleMapScreen", "Drawing polyline with ${points.size} points")
+                        Polyline(
+                            points = points,
+                            color = Color(0xFF2196F3), // NextBus primary blue
+                            width = 12f,
+                            geodesic = true
+                        )
+                    } else {
+                        Log.w("GoogleMapScreen", "No points to draw polyline")
+                    }
+                }
+            } ?: Log.d("GoogleMapScreen", "No directions response available")
         }
         
         // Top controls
@@ -419,6 +470,36 @@ fun GoogleMapScreen(
             onMinimizedChange = { viewModel.setSearchCardMinimized(it) },
             onSearchClick = { viewModel.setSearchCardExpanded(true) },
             onFavoritesClick = { /* Handle favorites click */ },
+            onPlaceSelected = { place, location ->
+                // Select the place and show it on the map
+                viewModel.selectPlace(location, place.name)
+                // Animate camera to show both origin and destination
+                coroutineScope.launch {
+                    userLocation?.let { origin ->
+                        // Calculate bounds to show both points
+                        val boundsBuilder = com.google.android.gms.maps.model.LatLngBounds.Builder()
+                        boundsBuilder.include(origin)
+                        boundsBuilder.include(location)
+                        val bounds = boundsBuilder.build()
+                        
+                        cameraPositionState.animate(
+                            CameraUpdateFactory.newLatLngBounds(bounds, 150), // 150dp padding
+                            1000
+                        )
+                    } ?: run {
+                        // If no user location, just center on destination
+                        cameraPositionState.animate(
+                            CameraUpdateFactory.newCameraPosition(
+                                CameraPosition.Builder()
+                                    .target(location)
+                                    .zoom(15f)
+                                    .build()
+                            ),
+                            1000
+                        )
+                    }
+                }
+            },
             onNearbyClick = {
                 // Immediately expand the search card for responsive UI
                 viewModel.setSearchCardExpanded(true)

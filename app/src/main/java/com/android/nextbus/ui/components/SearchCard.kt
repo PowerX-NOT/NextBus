@@ -42,7 +42,9 @@ import com.android.nextbus.BuildConfig
 import com.android.nextbus.data.model.BusStop
 import com.google.android.libraries.places.api.Places
 import com.google.android.libraries.places.api.model.AutocompleteSessionToken
+import com.google.android.libraries.places.api.model.Place
 import com.google.android.libraries.places.api.net.FindAutocompletePredictionsRequest
+import com.google.android.libraries.places.api.net.FetchPlaceRequest
 import com.google.android.libraries.places.api.net.PlacesClient
 import android.location.Location
 
@@ -62,7 +64,7 @@ fun SearchCard(
     onSearchClick: () -> Unit = {},
     onFavoritesClick: () -> Unit = {},
     onNearbyClick: () -> Unit = {},
-    onPlaceSelected: (PlaceSearchResult) -> Unit = {},
+    onPlaceSelected: (PlaceSearchResult, com.google.android.gms.maps.model.LatLng) -> Unit = { _, _ -> },
     onBusStopSelected: (BusStop) -> Unit = {},
     busStops: List<BusStop> = emptyList(),
     selectedBusStop: BusStop? = null,
@@ -474,7 +476,14 @@ fun SearchCard(
                                     result = result,
                                     onClick = {
                                         addToRecentSearches(result)
-                                        onPlaceSelected(result)
+                                        // Fetch place details to get coordinates
+                                        result.placeId?.let { placeId ->
+                                            getPlaceDetails(context, placeId) { latLng ->
+                                                latLng?.let {
+                                                    onPlaceSelected(result, it)
+                                                }
+                                            }
+                                        }
                                         searchQuery = ""
                                         searchResults = emptyList()
                                     }
@@ -498,7 +507,14 @@ fun SearchCard(
                             SearchResultItem(
                                 result = result,
                                 onClick = {
-                                    onPlaceSelected(result)
+                                    // Fetch place details to get coordinates
+                                    result.placeId?.let { placeId ->
+                                        getPlaceDetails(context, placeId) { latLng ->
+                                            latLng?.let {
+                                                onPlaceSelected(result, it)
+                                            }
+                                        }
+                                    }
                                     searchQuery = ""
                                     searchResults = emptyList()
                                 }
@@ -752,5 +768,39 @@ private fun searchPlaces(
         println("Places API Initialization Error: ${e.message}")
         e.printStackTrace()
         onResult(emptyList())
+    }
+}
+
+// Function to get place details (coordinates) from placeId
+private fun getPlaceDetails(
+    context: Context,
+    placeId: String,
+    onResult: (com.google.android.gms.maps.model.LatLng?) -> Unit
+) {
+    try {
+        if (!Places.isInitialized()) {
+            Places.initialize(context, BuildConfig.GOOGLE_API_KEY)
+        }
+
+        val placesClient = Places.createClient(context)
+        val placeFields = listOf(Place.Field.ID, Place.Field.NAME, Place.Field.LAT_LNG)
+        val request = FetchPlaceRequest.newInstance(placeId, placeFields)
+
+        placesClient.fetchPlace(request)
+            .addOnSuccessListener { response ->
+                val place = response.place
+                val latLng = place.latLng
+                println("Place Details Success: ${place.name} at $latLng")
+                onResult(latLng)
+            }
+            .addOnFailureListener { exception ->
+                println("Place Details Error: ${exception.message}")
+                exception.printStackTrace()
+                onResult(null)
+            }
+    } catch (e: Exception) {
+        println("Place Details Exception: ${e.message}")
+        e.printStackTrace()
+        onResult(null)
     }
 }

@@ -5,7 +5,9 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.android.nextbus.data.model.BusStop
+import com.android.nextbus.data.model.DirectionsResponse
 import com.android.nextbus.data.network.NearbyBusStopService
+import com.android.nextbus.data.network.DirectionsService
 import com.google.android.gms.maps.model.LatLng
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -19,6 +21,7 @@ class MapViewModel : ViewModel() {
     }
     
     private val nearbyBusStopService = NearbyBusStopService()
+    private val directionsService = DirectionsService()
     
     // State for bus stops
     private val _busStops = MutableStateFlow<List<BusStop>>(emptyList())
@@ -46,6 +49,20 @@ class MapViewModel : ViewModel() {
     // User location
     private val _userLocation = MutableStateFlow<LatLng?>(null)
     val userLocation: StateFlow<LatLng?> = _userLocation.asStateFlow()
+    
+    // Selected place (from search)
+    private val _selectedPlace = MutableStateFlow<LatLng?>(null)
+    val selectedPlace: StateFlow<LatLng?> = _selectedPlace.asStateFlow()
+    
+    private val _selectedPlaceName = MutableStateFlow<String?>(null)
+    val selectedPlaceName: StateFlow<String?> = _selectedPlaceName.asStateFlow()
+    
+    // Directions
+    private val _directionsResponse = MutableStateFlow<DirectionsResponse?>(null)
+    val directionsResponse: StateFlow<DirectionsResponse?> = _directionsResponse.asStateFlow()
+    
+    private val _isLoadingDirections = MutableStateFlow(false)
+    val isLoadingDirections: StateFlow<Boolean> = _isLoadingDirections.asStateFlow()
     
     // Last search location to prevent duplicate searches
     private var lastSearchLocation: LatLng? = null
@@ -125,6 +142,62 @@ class MapViewModel : ViewModel() {
         _busStops.value = emptyList()
         _selectedBusStop.value = null
         lastSearchLocation = null
+    }
+    
+    fun selectPlace(location: LatLng, placeName: String) {
+        _selectedPlace.value = location
+        _selectedPlaceName.value = placeName
+        Log.d(TAG, "Selected place: $placeName at $location")
+        
+        // Clear bus stops and selected bus stop when selecting a place
+        _busStops.value = emptyList()
+        _selectedBusStop.value = null
+        
+        // Fetch directions if user location is available
+        _userLocation.value?.let { origin ->
+            fetchDirections(origin, location)
+        }
+    }
+    
+    fun clearSelectedPlace() {
+        _selectedPlace.value = null
+        _selectedPlaceName.value = null
+        _directionsResponse.value = null
+    }
+    
+    fun fetchDirections(origin: LatLng, destination: LatLng) {
+        viewModelScope.launch {
+            try {
+                _isLoadingDirections.value = true
+                _error.value = null
+                
+                Log.d(TAG, "Fetching directions from $origin to $destination")
+                
+                val result = directionsService.getTransitDirections(origin, destination)
+                
+                result.fold(
+                    onSuccess = { response ->
+                        _directionsResponse.value = response
+                        Log.d(TAG, "Successfully loaded directions with ${response.routes.size} routes")
+                        response.routes.firstOrNull()?.let { route ->
+                            Log.d(TAG, "First route has polyline: ${route.polyline != null}")
+                            route.polyline?.let { poly ->
+                                Log.d(TAG, "Polyline data: ${poly.encodedPolyline.take(50)}...")
+                            }
+                        }
+                    },
+                    onFailure = { exception ->
+                        _error.value = "Failed to load directions: ${exception.message}"
+                        Log.e(TAG, "Error loading directions", exception)
+                    }
+                )
+            } catch (e: Exception) {
+                _error.value = "Unexpected error: ${e.message}"
+                Log.e(TAG, "Unexpected error in fetchDirections", e)
+            } finally {
+                _isLoadingDirections.value = false
+            }
+        }
     }
     
     // Calculate distance between two LatLng points in meters

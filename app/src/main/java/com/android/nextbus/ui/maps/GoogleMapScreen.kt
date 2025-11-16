@@ -104,6 +104,8 @@ fun GoogleMapScreen(
     val isSearchCardExpanded by viewModel.isSearchCardExpanded.collectAsState()
     val isSearchCardMinimized by viewModel.isSearchCardMinimized.collectAsState()
     val userLocationFromViewModel by viewModel.userLocation.collectAsState()
+    val routes by viewModel.routes.collectAsState()
+    val isRoutesLoading by viewModel.isRoutesLoading.collectAsState()
     
     // Location permission
     val locationPermissionState = rememberPermissionState(
@@ -462,7 +464,9 @@ fun GoogleMapScreen(
             busStops = busStops,
             selectedBusStop = selectedBusStop,
             isLoadingBusStops = isLoading,
-            userLocation = userLocation
+            userLocation = userLocation,
+            routes = routes,
+            isLoadingRoutes = isRoutesLoading
         )
     }
     

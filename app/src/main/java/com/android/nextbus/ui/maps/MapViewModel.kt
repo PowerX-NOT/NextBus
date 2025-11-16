@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.android.nextbus.data.model.BusStop
 import com.android.nextbus.data.network.NearbyBusStopService
+import com.android.nextbus.data.network.BusStopRouteService
 import com.google.android.gms.maps.model.LatLng
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -19,6 +20,7 @@ class MapViewModel : ViewModel() {
     }
     
     private val nearbyBusStopService = NearbyBusStopService()
+    private val busStopRouteService = BusStopRouteService()
     
     // State for bus stops
     private val _busStops = MutableStateFlow<List<BusStop>>(emptyList())
@@ -46,6 +48,13 @@ class MapViewModel : ViewModel() {
     // User location
     private val _userLocation = MutableStateFlow<LatLng?>(null)
     val userLocation: StateFlow<LatLng?> = _userLocation.asStateFlow()
+    
+    // Routes for selected bus stop
+    private val _routes = MutableStateFlow<List<String>>(emptyList())
+    val routes: StateFlow<List<String>> = _routes.asStateFlow()
+
+    private val _isRoutesLoading = MutableStateFlow(false)
+    val isRoutesLoading: StateFlow<Boolean> = _isRoutesLoading.asStateFlow()
     
     // Last search location to prevent duplicate searches
     private var lastSearchLocation: LatLng? = null
@@ -93,10 +102,40 @@ class MapViewModel : ViewModel() {
     fun selectBusStop(busStop: BusStop) {
         _selectedBusStop.value = busStop
         Log.d(TAG, "Selected bus stop: ${busStop.name}")
+
+        // Fetch routes for this bus stop if we have a placeId
+        val placeId = busStop.placeId
+        if (placeId != null) {
+            viewModelScope.launch {
+                try {
+                    _isRoutesLoading.value = true
+                    _routes.value = emptyList()
+                    val result = busStopRouteService.getRoutesForPlace(placeId)
+                    result.fold(
+                        onSuccess = { routes ->
+                            _routes.value = routes
+                            Log.d(TAG, "Loaded ${routes.size} routes for bus stop: ${busStop.name}")
+                        },
+                        onFailure = { exception ->
+                            Log.e(TAG, "Error loading routes for bus stop: ${exception.message}")
+                        }
+                    )
+                } catch (e: Exception) {
+                    Log.e(TAG, "Unexpected error while loading routes: ${e.message}", e)
+                } finally {
+                    _isRoutesLoading.value = false
+                }
+            }
+        } else {
+            _routes.value = emptyList()
+            _isRoutesLoading.value = false
+        }
     }
     
     fun clearSelectedBusStop() {
         _selectedBusStop.value = null
+        _routes.value = emptyList()
+        _isRoutesLoading.value = false
     }
     
     fun setSearchCardExpanded(expanded: Boolean) {

@@ -5,12 +5,14 @@ import android.widget.ArrayAdapter
 import android.widget.AutoCompleteTextView
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -67,7 +69,9 @@ fun SearchCard(
     busStops: List<BusStop> = emptyList(),
     selectedBusStop: BusStop? = null,
     isLoadingBusStops: Boolean = false,
-    userLocation: com.google.android.gms.maps.model.LatLng? = null
+    userLocation: com.google.android.gms.maps.model.LatLng? = null,
+    routes: List<String> = emptyList(),
+    isLoadingRoutes: Boolean = false
 ) {
     var dragOffset by remember { mutableStateOf(0f) }
     var searchQuery by remember { mutableStateOf("") }
@@ -379,7 +383,7 @@ fun SearchCard(
                                 modifier = Modifier.padding(bottom = 8.dp)
                             )
                         }
-                        
+
                         // Distance if available
                         userLocation?.let { userLoc ->
                             val distance = calculateDistance(userLoc, selectedBusStop.location)
@@ -405,6 +409,37 @@ fun SearchCard(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.padding(bottom = 8.dp)
                             )
+                        }
+
+                        // Routes for this bus stop
+                        when {
+                            isLoadingRoutes -> {
+                                Text(
+                                    text = "Loading routes...",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.padding(bottom = 8.dp)
+                                )
+                            }
+                            routes.isNotEmpty() -> {
+                                Text(
+                                    text = "Routes (${routes.size})",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(bottom = 4.dp)
+                                )
+
+                                LazyRow(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(bottom = 12.dp)
+                                ) {
+                                    items(routes) { route ->
+                                        RouteChip(label = route)
+                                    }
+                                }
+                            }
                         }
                         
                         // Types/Categories
@@ -515,6 +550,33 @@ fun SearchCard(
                     )
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun RouteChip(
+    label: String,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        tonalElevation = 1.dp,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.4f))
+    ) {
+        Box(
+            modifier = Modifier
+                .padding(horizontal = 12.dp, vertical = 6.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = label,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold
+            )
         }
     }
 }

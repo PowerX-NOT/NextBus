@@ -5,6 +5,7 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.location.LocationManager
 import androidx.compose.foundation.background
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.ime
@@ -95,6 +96,7 @@ fun GoogleMapScreen(
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     val configuration = LocalConfiguration.current
+    val isDarkTheme = isSystemInDarkTheme()
     
     // Collect state from ViewModel
     val busStops by viewModel.busStops.collectAsState()
@@ -250,7 +252,11 @@ fun GoogleMapScreen(
             cameraPositionState = cameraPositionState,
             properties = MapProperties(
                 isMyLocationEnabled = locationPermissionState.status.isGranted,
-                mapStyleOptions = com.android.nextbus.ui.theme.MapStyles.darkMapStyle
+                mapStyleOptions = if (isDarkTheme) {
+                    com.android.nextbus.ui.theme.MapStyles.darkMapStyle
+                } else {
+                    null
+                }
             ),
             uiSettings = MapUiSettings(
                 zoomControlsEnabled = false,

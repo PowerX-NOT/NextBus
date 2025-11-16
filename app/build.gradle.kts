@@ -75,7 +75,6 @@ dependencies {
     implementation(libs.maps.compose)
     implementation(libs.play.services.maps)
     implementation(libs.play.services.location)
-    implementation("com.google.maps.android:android-maps-utils:3.8.2")
     
     // Google Places
     implementation(libs.places)

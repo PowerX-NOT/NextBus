@@ -594,13 +594,20 @@ private fun AnimatedRoutePolyline(
         label = "route_progress"
     )
 
+    val easedProgress = remember(progress) { easeOutCubic(progress) }
+
     val n = densified.size
-    val idx = kotlin.math.max(2, (progress * n).toInt())
+    val idx = kotlin.math.max(2, (easedProgress * n).toInt())
     val animatedPoints = densified.subList(0, idx.coerceAtMost(n))
+
+    val bgAlpha = remember(progress) {
+        val base = lerp(0.3f, 1.0f, easeInCirc(progress))
+        if (progress < 0.001f) 0f else base
+    }
 
     Polyline(
         points = densified,
-        color = color.copy(alpha = 0.35f),
+        color = color.copy(alpha = bgAlpha),
         width = width
     )
 
@@ -653,4 +660,19 @@ private fun interpolateLatLng(a: LatLng, b: LatLng, t: Double): LatLng {
     val lat = a.latitude + ((b.latitude - a.latitude) * t)
     val lng = a.longitude + ((b.longitude - a.longitude) * t)
     return LatLng(lat, lng)
+}
+
+private fun easeOutCubic(t: Float): Float {
+    val x = t.coerceIn(0f, 1f)
+    return 1f - (1f - x) * (1f - x) * (1f - x)
+}
+
+private fun easeInCirc(t: Float): Float {
+    val x = t.coerceIn(0f, 1f)
+    return 1f - kotlin.math.sqrt(1f - (x * x))
+}
+
+private fun lerp(a: Float, b: Float, t: Float): Float {
+    val x = t.coerceIn(0f, 1f)
+    return a + (b - a) * x
 }

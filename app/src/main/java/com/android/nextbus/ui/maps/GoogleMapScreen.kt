@@ -11,7 +11,11 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
@@ -333,7 +337,7 @@ fun GoogleMapScreen(
                     }
                 }
                 .forEach { routeLine ->
-                Polyline(
+                AnimatedRoutePolyline(
                     points = routeLine.points,
                     color = if (routeLine.direction == 0) Color(0xFF1E88E5) else Color(0xFFE53935),
                     width = 10f
@@ -565,4 +569,88 @@ fun GoogleMapScreen(
             locationPermissionState.launchPermissionRequest()
         }
     }
+}
+
+@Composable
+private fun AnimatedRoutePolyline(
+    points: List<LatLng>,
+    color: Color,
+    width: Float,
+    durationMs: Int = 3000,
+    stepMeters: Float = 15f
+) {
+    val densified = remember(points) {
+        densifyPolyline(points, stepMeters)
+    }
+    if (densified.size < 2) return
+
+    val transition = rememberInfiniteTransition(label = "route_polyline")
+    val progress by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = durationMs, easing = LinearEasing)
+        ),
+        label = "route_progress"
+    )
+
+    val n = densified.size
+    val idx = kotlin.math.max(2, (progress * n).toInt())
+    val animatedPoints = densified.subList(0, idx.coerceAtMost(n))
+
+    Polyline(
+        points = densified,
+        color = color.copy(alpha = 0.35f),
+        width = width
+    )
+
+    Polyline(
+        points = animatedPoints,
+        color = color,
+        width = width
+    )
+}
+
+private fun densifyPolyline(points: List<LatLng>, stepMeters: Float): List<LatLng> {
+    if (points.size < 2) return points
+    if (stepMeters <= 0f) return points
+
+    val out = ArrayList<LatLng>(points.size * 2)
+    out.add(points.first())
+
+    for (i in 0 until points.size - 1) {
+        val a = points[i]
+        val b = points[i + 1]
+        val dist = distanceMeters(a, b)
+        if (dist <= stepMeters) {
+            out.add(b)
+            continue
+        }
+
+        val steps = (dist / stepMeters).toInt().coerceAtLeast(1)
+        for (s in 1..steps) {
+            val t = (s.toDouble() / steps.toDouble()).coerceIn(0.0, 1.0)
+            out.add(interpolateLatLng(a, b, t))
+        }
+    }
+
+    return out
+}
+
+private fun distanceMeters(a: LatLng, b: LatLng): Float {
+    val results = FloatArray(1)
+    android.location.Location.distanceBetween(
+        a.latitude,
+        a.longitude,
+        b.latitude,
+        b.longitude,
+        results
+    )
+    return results[0]
+}
+
+private fun interpolateLatLng(a: LatLng, b: LatLng, t: Double): LatLng {
+    val lat = a.latitude + ((b.latitude - a.latitude) * t)
+    val lng = a.longitude + ((b.longitude - a.longitude) * t)
+    return LatLng(lat, lng)
 }

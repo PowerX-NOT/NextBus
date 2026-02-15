@@ -28,7 +28,8 @@ class NearbyBusStopService {
     suspend fun resolveBusStopToGooglePlace(
         stopName: String,
         latitude: Double,
-        longitude: Double
+        longitude: Double,
+        polylinePoints: List<LatLng>? = null
     ): Result<BusStop?> = withContext(Dispatchers.IO) {
         try {
             val trimmedName = stopName.trim()
@@ -61,7 +62,10 @@ class NearbyBusStopService {
             val best = uniqueCandidates.minByOrNull { candidate ->
                 val dist = distanceMeters(latitude, longitude, candidate.location.latitude, candidate.location.longitude)
                 val namePenalty = namePenalty(trimmedName, candidate.name)
-                dist + namePenalty
+                val polyPenalty = polylinePoints?.let { pts ->
+                    distanceToPolylineMeters(pts, candidate.location)
+                } ?: 0.0
+                dist + namePenalty + (polyPenalty * 1.5)
             }
 
             Result.success(best)
@@ -169,6 +173,80 @@ class NearbyBusStopService {
             c.contains(q) || q.contains(c) -> 50.0
             else -> 400.0
         }
+    }
+
+    private fun distanceToPolylineMeters(points: List<LatLng>, target: LatLng): Double {
+        if (points.size < 2) return Double.MAX_VALUE
+        val nearest = nearestPointOnPolylineSegments(points, target)
+        return distanceMeters(target.latitude, target.longitude, nearest.latitude, nearest.longitude)
+    }
+
+    private fun nearestPointOnPolylineSegments(points: List<LatLng>, target: LatLng): LatLng {
+        if (points.isEmpty()) return target
+        if (points.size == 1) return points.first()
+
+        val refLat = target.latitude
+        var bestPoint = points.first()
+        var bestDist = Double.MAX_VALUE
+
+        for (i in 0 until points.size - 1) {
+            val a = points[i]
+            val b = points[i + 1]
+            val p = projectPointToSegment(refLat, a, b, target)
+            val d = distanceMeters(target.latitude, target.longitude, p.latitude, p.longitude)
+            if (d < bestDist) {
+                bestDist = d
+                bestPoint = p
+            }
+        }
+
+        return bestPoint
+    }
+
+    private fun projectPointToSegment(refLat: Double, a: LatLng, b: LatLng, p: LatLng): LatLng {
+        val ax = lngToMeters(refLat, a.longitude)
+        val ay = latToMeters(a.latitude)
+        val bx = lngToMeters(refLat, b.longitude)
+        val by = latToMeters(b.latitude)
+        val px = lngToMeters(refLat, p.longitude)
+        val py = latToMeters(p.latitude)
+
+        val abx = bx - ax
+        val aby = by - ay
+        val apx = px - ax
+        val apy = py - ay
+
+        val abLen2 = (abx * abx) + (aby * aby)
+        if (abLen2 <= 0.0) return a
+
+        var t = ((apx * abx) + (apy * aby)) / abLen2
+        if (t < 0.0) t = 0.0
+        if (t > 1.0) t = 1.0
+
+        val x = ax + (t * abx)
+        val y = ay + (t * aby)
+        val lat = metersToLat(y)
+        val lng = metersToLng(refLat, x)
+        return LatLng(lat, lng)
+    }
+
+    private fun latToMeters(lat: Double): Double {
+        return lat * 111_320.0
+    }
+
+    private fun lngToMeters(refLat: Double, lng: Double): Double {
+        val latRad = Math.toRadians(refLat)
+        return lng * (111_320.0 * kotlin.math.cos(latRad))
+    }
+
+    private fun metersToLat(yMeters: Double): Double {
+        return yMeters / 111_320.0
+    }
+
+    private fun metersToLng(refLat: Double, xMeters: Double): Double {
+        val latRad = Math.toRadians(refLat)
+        val denom = 111_320.0 * kotlin.math.cos(latRad)
+        return if (denom == 0.0) 0.0 else xMeters / denom
     }
     
     private fun parseResponse(jsonData: String): List<BusStop> {

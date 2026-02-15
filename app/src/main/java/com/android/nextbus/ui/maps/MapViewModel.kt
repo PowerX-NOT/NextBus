@@ -222,27 +222,52 @@ class MapViewModel : ViewModel() {
         viewModelScope.launch {
             var effectiveStop = busStop
 
+            val directionFromId = effectiveStop.id.split(":").getOrNull(2)?.toIntOrNull()
+            val preferredDirection = when {
+                _isUpRouteVisible.value -> 0
+                _isDownRouteVisible.value -> 1
+                else -> directionFromId
+            }
+            val directionPolylinePoints = preferredDirection
+                ?.let { dir -> _routePolylines.value.firstOrNull { it.direction == dir }?.points }
+
             // BMTC route stops often have inaccurate coordinates; resolve to nearest Google Place
             if (effectiveStop.placeId == null && effectiveStop.id.startsWith("bmtc:")) {
+                val biasLocation = directionPolylinePoints
+                    ?.takeIf { it.size >= 2 }
+                    ?.let { pts -> nearestPointOnPolyline(pts, effectiveStop.location) }
+                    ?: effectiveStop.location
+
                 val resolved = nearbyBusStopService
                     .resolveBusStopToGooglePlace(
                         stopName = effectiveStop.name,
-                        latitude = effectiveStop.location.latitude,
-                        longitude = effectiveStop.location.longitude
+                        latitude = biasLocation.latitude,
+                        longitude = biasLocation.longitude,
+                        polylinePoints = directionPolylinePoints
                     )
                     .getOrNull()
 
-                if (resolved != null) {
-                    effectiveStop = effectiveStop.copy(
-                        vicinity = resolved.vicinity,
-                        location = resolved.location,
-                        placeId = resolved.placeId,
-                        reference = resolved.reference,
-                        rating = resolved.rating,
-                        types = resolved.types
+                val baseResolved = resolved?.let {
+                    effectiveStop.copy(
+                        vicinity = it.vicinity,
+                        location = it.location,
+                        placeId = it.placeId,
+                        reference = it.reference,
+                        rating = it.rating,
+                        types = it.types
                     )
-                    _selectedBusStop.value = effectiveStop
                 }
+
+                val stopForSnapping = baseResolved ?: effectiveStop
+                val snappedLocation = directionPolylinePoints
+                    ?.takeIf { it.size >= 2 }
+                    ?.let { pts ->
+                        nearestPointOnPolyline(pts, stopForSnapping.location)
+                    }
+                    ?: stopForSnapping.location
+
+                effectiveStop = stopForSnapping.copy(location = snappedLocation)
+                _selectedBusStop.value = effectiveStop
             }
 
             // Fetch routes for this bus stop if we have a placeId
@@ -348,6 +373,74 @@ class MapViewModel : ViewModel() {
             results
         )
         return results[0]
+    }
+
+    private fun nearestPointOnPolyline(points: List<LatLng>, target: LatLng): LatLng {
+        if (points.isEmpty()) return target
+        if (points.size == 1) return points.first()
+
+        val refLat = target.latitude
+        var bestPoint = points.first()
+        var bestDistance = Float.MAX_VALUE
+
+        for (i in 0 until points.size - 1) {
+            val a = points[i]
+            val b = points[i + 1]
+            val candidate = projectPointToSegment(refLat, a, b, target)
+            val d = calculateDistance(candidate, target)
+            if (d < bestDistance) {
+                bestDistance = d
+                bestPoint = candidate
+            }
+        }
+
+        return bestPoint
+    }
+
+    private fun projectPointToSegment(refLat: Double, a: LatLng, b: LatLng, p: LatLng): LatLng {
+        val ax = lngToMeters(refLat, a.longitude)
+        val ay = latToMeters(a.latitude)
+        val bx = lngToMeters(refLat, b.longitude)
+        val by = latToMeters(b.latitude)
+        val px = lngToMeters(refLat, p.longitude)
+        val py = latToMeters(p.latitude)
+
+        val abx = bx - ax
+        val aby = by - ay
+        val apx = px - ax
+        val apy = py - ay
+
+        val abLen2 = (abx * abx) + (aby * aby)
+        if (abLen2 <= 0.0) return a
+
+        var t = ((apx * abx) + (apy * aby)) / abLen2
+        if (t < 0.0) t = 0.0
+        if (t > 1.0) t = 1.0
+
+        val x = ax + (t * abx)
+        val y = ay + (t * aby)
+        val lat = metersToLat(y)
+        val lng = metersToLng(refLat, x)
+        return LatLng(lat, lng)
+    }
+
+    private fun latToMeters(lat: Double): Double {
+        return lat * 111_320.0
+    }
+
+    private fun lngToMeters(refLat: Double, lng: Double): Double {
+        val latRad = Math.toRadians(refLat)
+        return lng * (111_320.0 * kotlin.math.cos(latRad))
+    }
+
+    private fun metersToLat(yMeters: Double): Double {
+        return yMeters / 111_320.0
+    }
+
+    private fun metersToLng(refLat: Double, xMeters: Double): Double {
+        val latRad = Math.toRadians(refLat)
+        val denom = 111_320.0 * kotlin.math.cos(latRad)
+        return if (denom == 0.0) 0.0 else xMeters / denom
     }
     
     // Sample bus stops for testing (can be removed once API is working)

@@ -219,10 +219,35 @@ class MapViewModel : ViewModel() {
         _selectedBusStop.value = busStop
         Log.d(TAG, "Selected bus stop: ${busStop.name}")
 
-        // Fetch routes for this bus stop if we have a placeId
-        val placeId = busStop.placeId
-        if (placeId != null) {
-            viewModelScope.launch {
+        viewModelScope.launch {
+            var effectiveStop = busStop
+
+            // BMTC route stops often have inaccurate coordinates; resolve to nearest Google Place
+            if (effectiveStop.placeId == null && effectiveStop.id.startsWith("bmtc:")) {
+                val resolved = nearbyBusStopService
+                    .resolveBusStopToGooglePlace(
+                        stopName = effectiveStop.name,
+                        latitude = effectiveStop.location.latitude,
+                        longitude = effectiveStop.location.longitude
+                    )
+                    .getOrNull()
+
+                if (resolved != null) {
+                    effectiveStop = effectiveStop.copy(
+                        vicinity = resolved.vicinity,
+                        location = resolved.location,
+                        placeId = resolved.placeId,
+                        reference = resolved.reference,
+                        rating = resolved.rating,
+                        types = resolved.types
+                    )
+                    _selectedBusStop.value = effectiveStop
+                }
+            }
+
+            // Fetch routes for this bus stop if we have a placeId
+            val placeId = effectiveStop.placeId
+            if (placeId != null) {
                 try {
                     _isRoutesLoading.value = true
                     _routes.value = emptyList()
@@ -230,7 +255,7 @@ class MapViewModel : ViewModel() {
                     result.fold(
                         onSuccess = { routes ->
                             _routes.value = routes
-                            Log.d(TAG, "Loaded ${routes.size} routes for bus stop: ${busStop.name}")
+                            Log.d(TAG, "Loaded ${routes.size} routes for bus stop: ${effectiveStop.name}")
                         },
                         onFailure = { exception ->
                             Log.e(TAG, "Error loading routes for bus stop: ${exception.message}")
@@ -241,10 +266,10 @@ class MapViewModel : ViewModel() {
                 } finally {
                     _isRoutesLoading.value = false
                 }
+            } else {
+                _routes.value = emptyList()
+                _isRoutesLoading.value = false
             }
-        } else {
-            _routes.value = emptyList()
-            _isRoutesLoading.value = false
         }
     }
 

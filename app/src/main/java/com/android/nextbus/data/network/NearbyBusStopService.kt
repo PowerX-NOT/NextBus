@@ -12,8 +12,10 @@ import org.json.JSONObject
 import java.io.BufferedReader
 import java.io.IOException
 import java.io.InputStreamReader
+import java.net.URLEncoder
 import java.net.HttpURLConnection
 import java.net.URL
+import android.location.Location
 
 class NearbyBusStopService {
     
@@ -21,6 +23,52 @@ class NearbyBusStopService {
         private const val TAG = "NearbyBusStopService"
         private const val PROXIMITY_RADIUS = 1000 // 1km radius
         private const val PLACES_API_BASE_URL = "https://maps.googleapis.com/maps/api/place/nearbysearch/json"
+    }
+
+    suspend fun resolveBusStopToGooglePlace(
+        stopName: String,
+        latitude: Double,
+        longitude: Double
+    ): Result<BusStop?> = withContext(Dispatchers.IO) {
+        try {
+            val trimmedName = stopName.trim()
+            if (trimmedName.isEmpty()) return@withContext Result.success(null)
+
+            val encodedKeyword = URLEncoder.encode(trimmedName, "UTF-8")
+            val searchTypes = listOf("bus_station", "transit_station")
+            val radiusMeters = 1200
+
+            val candidates = mutableListOf<BusStop>()
+            for (type in searchTypes) {
+                val url = StringBuilder(PLACES_API_BASE_URL).apply {
+                    append("?location=$latitude,$longitude")
+                    append("&radius=$radiusMeters")
+                    append("&type=$type")
+                    append("&keyword=$encodedKeyword")
+                    append("&sensor=true")
+                    append("&key=${BuildConfig.GOOGLE_API_KEY}")
+                }.toString()
+
+                val response = downloadUrl(url)
+                if (response.isNotEmpty()) {
+                    candidates.addAll(parseResponse(response))
+                }
+            }
+
+            val uniqueCandidates = candidates.distinctBy { it.placeId ?: it.name }
+            if (uniqueCandidates.isEmpty()) return@withContext Result.success(null)
+
+            val best = uniqueCandidates.minByOrNull { candidate ->
+                val dist = distanceMeters(latitude, longitude, candidate.location.latitude, candidate.location.longitude)
+                val namePenalty = namePenalty(trimmedName, candidate.name)
+                dist + namePenalty
+            }
+
+            Result.success(best)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error resolving stop to Google Place: ${e.message}")
+            Result.failure(e)
+        }
     }
     
     suspend fun getNearbyBusStops(
@@ -105,6 +153,22 @@ class NearbyBusStopService {
         
         Log.d(TAG, "Downloaded data length: ${data.length}")
         return data
+    }
+
+    private fun distanceMeters(lat1: Double, lng1: Double, lat2: Double, lng2: Double): Double {
+        val results = FloatArray(1)
+        Location.distanceBetween(lat1, lng1, lat2, lng2, results)
+        return results.firstOrNull()?.toDouble() ?: Double.MAX_VALUE
+    }
+
+    private fun namePenalty(query: String, candidate: String): Double {
+        val q = query.lowercase()
+        val c = candidate.lowercase()
+        return when {
+            c == q -> 0.0
+            c.contains(q) || q.contains(c) -> 50.0
+            else -> 400.0
+        }
     }
     
     private fun parseResponse(jsonData: String): List<BusStop> {

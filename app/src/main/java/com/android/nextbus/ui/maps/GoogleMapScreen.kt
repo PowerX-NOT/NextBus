@@ -167,6 +167,19 @@ fun GoogleMapScreen(
         position = CameraPosition.fromLatLngZoom(currentLocation, 15f)
     }
 
+    LaunchedEffect(selectedBusStop) {
+        val stop = selectedBusStop ?: return@LaunchedEffect
+        cameraPositionState.animate(
+            CameraUpdateFactory.newCameraPosition(
+                CameraPosition.Builder()
+                    .target(stop.location)
+                    .zoom(16f)
+                    .build()
+            ),
+            1000
+        )
+    }
+
     LaunchedEffect(routePolylines) {
         val allPoints = routePolylines.flatMap { it.points }
         if (allPoints.size < 2) return@LaunchedEffect
@@ -515,18 +528,6 @@ fun GoogleMapScreen(
                 viewModel.selectBusStop(busStop)
                 // Expand search card to show bus stop details
                 viewModel.setSearchCardExpanded(true)
-                // Animate camera to selected bus stop
-                coroutineScope.launch {
-                    cameraPositionState.animate(
-                        CameraUpdateFactory.newCameraPosition(
-                            CameraPosition.Builder()
-                                .target(busStop.location)
-                                .zoom(16f)
-                                .build()
-                        ),
-                        1000
-                    )
-                }
             },
             busStops = busStops,
             routeSuggestions = routeSuggestions,

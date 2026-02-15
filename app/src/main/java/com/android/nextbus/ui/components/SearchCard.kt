@@ -36,6 +36,8 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -559,56 +561,92 @@ fun SearchCard(
                 else if (searchMode == SearchMode.Routes) {
                     if (selectedRouteNo != null) {
                         Column(modifier = Modifier.fillMaxWidth()) {
-                            Text(
-                                text = selectedRouteNo,
-                                fontSize = 18.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                modifier = Modifier.padding(horizontal = 16.dp)
-                            )
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = selectedRouteNo,
+                                    fontSize = 18.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    modifier = Modifier.weight(1f)
+                                )
+
+                                Switch(
+                                    checked = isDownRouteVisible,
+                                    onCheckedChange = { checked ->
+                                        if (checked) {
+                                            onDownRouteVisibleChange(true)
+                                        } else {
+                                            onUpRouteVisibleChange(true)
+                                        }
+                                    }
+                                )
+                            }
 
                             Spacer(modifier = Modifier.height(8.dp))
+
+                            val fromStop = filteredRouteStops.firstOrNull()?.name
+                            val toStop = filteredRouteStops.lastOrNull()?.name
+                            val sourceText = fromStop?.takeIf { it.isNotBlank() } ?: "Source"
+                            val destinationText = toStop?.takeIf { it.isNotBlank() } ?: "Destination"
 
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(horizontal = 16.dp),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                FilterChip(
-                                    selected = isUpRouteVisible,
-                                    onClick = { onUpRouteVisibleChange(true) },
-                                    label = {
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Box(
-                                                modifier = Modifier
-                                                    .size(10.dp)
-                                                    .clip(RoundedCornerShape(10.dp))
-                                                    .background(Color(0xFF1E88E5))
-                                            )
-                                            Spacer(modifier = Modifier.width(8.dp))
-                                            Text("UP")
-                                        }
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Surface(
+                                        modifier = Modifier.weight(1f),
+                                        shape = RoundedCornerShape(16.dp),
+                                        color = MaterialTheme.colorScheme.surfaceVariant,
+                                        tonalElevation = 1.dp,
+                                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.4f))
+                                    ) {
+                                        Text(
+                                            text = sourceText,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            maxLines = 2,
+                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                                        )
                                     }
-                                )
 
-                                FilterChip(
-                                    selected = isDownRouteVisible,
-                                    onClick = { onDownRouteVisibleChange(true) },
-                                    label = {
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Box(
-                                                modifier = Modifier
-                                                    .size(10.dp)
-                                                    .clip(RoundedCornerShape(10.dp))
-                                                    .background(Color(0xFFE53935))
-                                            )
-                                            Spacer(modifier = Modifier.width(8.dp))
-                                            Text("DOWN")
-                                        }
+                                    Text(
+                                        text = "→",
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+
+                                    Surface(
+                                        modifier = Modifier.weight(1f),
+                                        shape = RoundedCornerShape(16.dp),
+                                        color = MaterialTheme.colorScheme.surfaceVariant,
+                                        tonalElevation = 1.dp,
+                                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.4f))
+                                    ) {
+                                        Text(
+                                            text = destinationText,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            maxLines = 2,
+                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                                        )
                                     }
-                                )
+                                }
                             }
                         }
 

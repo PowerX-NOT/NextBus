@@ -29,6 +29,15 @@ class BmtcRouteService {
         val points: List<LatLng>
     )
 
+    data class LiveVehicle(
+        val direction: Int,
+        val vehicleId: Int?,
+        val vehicleNumber: String?,
+        val location: LatLng?,
+        val eta: String?,
+        val lastRefreshOn: String?
+    )
+
     suspend fun searchRoutes(query: String): Result<List<RouteSuggestion>> = withContext(Dispatchers.IO) {
         try {
             val trimmed = query.trim()
@@ -118,6 +127,35 @@ class BmtcRouteService {
             fetchStopsForRouteParentId(routeNo = trimmed, routeParentId = routeParentId)
         } catch (e: Exception) {
             Log.e(TAG, "Error searching BMTC route stops: ${e.message}", e)
+            Result.failure(e)
+        }
+    }
+
+    suspend fun fetchLiveVehicles(routeNo: String): Result<List<LiveVehicle>> = withContext(Dispatchers.IO) {
+        try {
+            val trimmed = routeNo.trim()
+            if (trimmed.isEmpty()) {
+                return@withContext Result.success(emptyList())
+            }
+
+            val routeParentId = resolveRouteParentId(trimmed) ?: return@withContext Result.success(emptyList())
+            val detailsJson = postJson(
+                url = "$BASE_URL/SearchByRouteDetails_v4",
+                body = JSONObject()
+                    .put("routeid", routeParentId)
+                    .put("servicetypeid", 0),
+                extraHeaders = mapOf("deviceType" to "WEB")
+            )
+
+            val upMap = ((detailsJson.optJSONObject("up")?.opt("mapData")) as? JSONArray) ?: JSONArray()
+            val downMap = ((detailsJson.optJSONObject("down")?.opt("mapData")) as? JSONArray) ?: JSONArray()
+
+            val out = ArrayList<LiveVehicle>(upMap.length() + downMap.length())
+            out.addAll(parseLiveVehicles(direction = 0, mapData = upMap))
+            out.addAll(parseLiveVehicles(direction = 1, mapData = downMap))
+            Result.success(out)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error fetching BMTC live vehicles: ${e.message}", e)
             Result.failure(e)
         }
     }
@@ -235,6 +273,33 @@ class BmtcRouteService {
             )
         }
         return stops
+    }
+
+    private fun parseLiveVehicles(direction: Int, mapData: JSONArray): List<LiveVehicle> {
+        if (mapData.length() == 0) return emptyList()
+        val out = ArrayList<LiveVehicle>(mapData.length())
+        for (i in 0 until mapData.length()) {
+            val obj = mapData.optJSONObject(i) ?: continue
+            val vehicleId = obj.optInt("vehicleid").takeIf { it != 0 }
+            val vehicleNumber = obj.optString("vehiclenumber").takeIf { it.isNotBlank() }
+            val lat = obj.optDouble("centerlat", Double.NaN)
+            val lng = obj.optDouble("centerlong", Double.NaN)
+            val location = if (!lat.isNaN() && !lng.isNaN()) LatLng(lat, lng) else null
+            val eta = obj.optString("eta").takeIf { it.isNotBlank() }
+            val last = obj.optString("lastrefreshon").takeIf { it.isNotBlank() }
+
+            out.add(
+                LiveVehicle(
+                    direction = direction,
+                    vehicleId = vehicleId,
+                    vehicleNumber = vehicleNumber,
+                    location = location,
+                    eta = eta,
+                    lastRefreshOn = last
+                )
+            )
+        }
+        return out
     }
 
     private fun postJson(url: String, body: JSONObject, extraHeaders: Map<String, String> = emptyMap()): JSONObject {

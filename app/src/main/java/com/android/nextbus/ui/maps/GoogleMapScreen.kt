@@ -76,6 +76,33 @@ fun bitmapDescriptorFromVector(context: Context, vectorResId: Int, width: Int = 
     }
 }
 
+fun bitmapDescriptorFromDrawablePreserveAspect(
+    context: Context,
+    resId: Int,
+    maxWidth: Int,
+    maxHeight: Int
+): BitmapDescriptor? {
+    return try {
+        val drawable = ContextCompat.getDrawable(context, resId) ?: return null
+        val iw = drawable.intrinsicWidth.takeIf { it > 0 } ?: maxWidth
+        val ih = drawable.intrinsicHeight.takeIf { it > 0 } ?: maxHeight
+
+        val scale = minOf(maxWidth.toFloat() / iw.toFloat(), maxHeight.toFloat() / ih.toFloat())
+            .coerceAtMost(1f)
+
+        val w = (iw * scale).toInt().coerceAtLeast(1)
+        val h = (ih * scale).toInt().coerceAtLeast(1)
+
+        drawable.setBounds(0, 0, w, h)
+        val bitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        drawable.draw(canvas)
+        BitmapDescriptorFactory.fromBitmap(bitmap)
+    } catch (e: Exception) {
+        null
+    }
+}
+
 @SuppressLint("MissingPermission")
 suspend fun getCurrentLocation(context: Context): LatLng? {
     val fusedLocationClient = LocationServices.getFusedLocationProviderClient(context)
@@ -122,6 +149,7 @@ fun GoogleMapScreen(
     val routePolylines by viewModel.routePolylines.collectAsState()
     val isUpRouteVisible by viewModel.isUpRouteVisible.collectAsState()
     val isDownRouteVisible by viewModel.isDownRouteVisible.collectAsState()
+    val liveVehicles by viewModel.liveVehicles.collectAsState()
     
     // Location permission
     val locationPermissionState = rememberPermissionState(
@@ -342,6 +370,37 @@ fun GoogleMapScreen(
                     color = if (routeLine.direction == 0) Color(0xFF1E88E5) else Color(0xFFE53935),
                     width = 10f
                 )
+            }
+
+            // Live vehicles (route tracking)
+            // Only show when viewing a route; filter by selected direction toggle.
+            if (selectedRouteNo != null) {
+                val liveBusIcon = remember {
+                    bitmapDescriptorFromDrawablePreserveAspect(
+                        context,
+                        R.drawable.bus_live,
+                        maxWidth = 200,
+                        maxHeight = 100
+                    )
+                }
+
+                liveVehicles
+                    .filter { v ->
+                        when (v.direction) {
+                            0 -> isUpRouteVisible
+                            1 -> isDownRouteVisible
+                            else -> true
+                        }
+                    }
+                    .forEach { v ->
+                        val loc = v.location ?: return@forEach
+                        Marker(
+                            state = MarkerState(position = loc),
+                            title = v.vehicleNumber ?: "Live Bus",
+                            snippet = v.eta?.let { "ETA: $it" },
+                            icon = liveBusIcon ?: BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE)
+                        )
+                    }
             }
 
             // Bus stop markers with custom pins

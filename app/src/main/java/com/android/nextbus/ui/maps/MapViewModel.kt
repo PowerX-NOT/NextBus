@@ -10,6 +10,7 @@ import com.android.nextbus.data.network.NearbyBusStopService
 import com.android.nextbus.data.network.BusStopRouteService
 import com.google.android.gms.maps.model.LatLng
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -91,10 +92,17 @@ class MapViewModel : ViewModel() {
     private val _isDownRouteVisible = MutableStateFlow(false)
     val isDownRouteVisible: StateFlow<Boolean> = _isDownRouteVisible.asStateFlow()
 
+    private val _liveVehicles = MutableStateFlow<List<BmtcRouteService.LiveVehicle>>(emptyList())
+    val liveVehicles: StateFlow<List<BmtcRouteService.LiveVehicle>> = _liveVehicles.asStateFlow()
+
+    private val _isLiveVehiclesLoading = MutableStateFlow(false)
+    val isLiveVehiclesLoading: StateFlow<Boolean> = _isLiveVehiclesLoading.asStateFlow()
+
     // Last search location to prevent duplicate searches
     private var lastSearchLocation: LatLng? = null
 
     private var routeSearchJob: Job? = null
+    private var liveVehiclesJob: Job? = null
     
     fun searchNearbyBusStops(location: LatLng) {
         // Prevent duplicate searches for the same location
@@ -138,6 +146,7 @@ class MapViewModel : ViewModel() {
 
     fun selectRoute(routeNo: String) {
         routeSearchJob?.cancel()
+        liveVehiclesJob?.cancel()
 
         val normalized = routeNo.trim()
         if (normalized.isBlank()) {
@@ -148,6 +157,7 @@ class MapViewModel : ViewModel() {
         _selectedRouteNo.value = normalized
         _isUpRouteVisible.value = true
         _isDownRouteVisible.value = false
+        _liveVehicles.value = emptyList()
 
         routeSearchJob = viewModelScope.launch {
             try {
@@ -168,6 +178,42 @@ class MapViewModel : ViewModel() {
                 _isRoutePolylineLoading.value = false
             }
         }
+
+        startLiveVehiclesPolling(normalized)
+    }
+
+    private fun startLiveVehiclesPolling(routeNo: String) {
+        liveVehiclesJob?.cancel()
+        if (routeNo.isBlank()) {
+            _liveVehicles.value = emptyList()
+            _isLiveVehiclesLoading.value = false
+            return
+        }
+
+        liveVehiclesJob = viewModelScope.launch {
+            while (true) {
+                try {
+                    _isLiveVehiclesLoading.value = true
+                    val result = bmtcRouteService.fetchLiveVehicles(routeNo)
+                    result.fold(
+                        onSuccess = { vehicles ->
+                            _liveVehicles.value = vehicles
+                        },
+                        onFailure = { e ->
+                            Log.e(TAG, "Error fetching live vehicles: ${e.message}", e)
+                            _liveVehicles.value = emptyList()
+                        }
+                    )
+                } catch (e: Exception) {
+                    Log.e(TAG, "Unexpected error fetching live vehicles: ${e.message}", e)
+                    _liveVehicles.value = emptyList()
+                } finally {
+                    _isLiveVehiclesLoading.value = false
+                }
+
+                delay(10_000)
+            }
+        }
     }
 
     fun clearSelectedRoute() {
@@ -178,6 +224,9 @@ class MapViewModel : ViewModel() {
         _isRoutePolylineLoading.value = false
         _isUpRouteVisible.value = true
         _isDownRouteVisible.value = false
+        liveVehiclesJob?.cancel()
+        _liveVehicles.value = emptyList()
+        _isLiveVehiclesLoading.value = false
     }
 
     fun setUpRouteVisible(visible: Boolean) {
@@ -371,6 +420,15 @@ class MapViewModel : ViewModel() {
         _selectedRouteNo.value = null
         _routePolylines.value = emptyList()
         _isRoutePolylineLoading.value = false
+        liveVehiclesJob?.cancel()
+        _liveVehicles.value = emptyList()
+        _isLiveVehiclesLoading.value = false
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        liveVehiclesJob?.cancel()
+        routeSearchJob?.cancel()
     }
     
     // Calculate distance between two LatLng points in meters

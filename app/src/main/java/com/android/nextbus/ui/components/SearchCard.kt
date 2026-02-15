@@ -68,12 +68,15 @@ fun SearchCard(
     onNearbyClick: () -> Unit = {},
     onPlaceSelected: (PlaceSearchResult) -> Unit = {},
     onRouteQueryChange: (String) -> Unit = {},
+    onRouteSelected: (String) -> Unit = {},
     onBusStopSelected: (BusStop) -> Unit = {},
     busStops: List<BusStop> = emptyList(),
+    routeSuggestions: List<String> = emptyList(),
     routeSearchResults: List<BusStop> = emptyList(),
     selectedBusStop: BusStop? = null,
     isLoadingBusStops: Boolean = false,
     isRouteSearchLoading: Boolean = false,
+    isRouteSuggestionsLoading: Boolean = false,
     userLocation: com.google.android.gms.maps.model.LatLng? = null,
     routes: List<String> = emptyList(),
     isLoadingRoutes: Boolean = false
@@ -84,6 +87,7 @@ fun SearchCard(
     var isSearching by remember { mutableStateOf(false) }
     var recentSearches by remember { mutableStateOf<List<PlaceSearchResult>>(emptyList()) }
     var searchMode by remember { mutableStateOf(SearchMode.Places) }
+    var selectedRouteNo by remember { mutableStateOf<String?>(null) }
     
     // Function to add item to recent searches
     fun addToRecentSearches(item: PlaceSearchResult) {
@@ -198,6 +202,7 @@ fun SearchCard(
                             isSearching = false
                             searchResults = emptyList()
                             onRouteQueryChange("")
+                            selectedRouteNo = null
                         },
                         label = { Text("Places") }
                     )
@@ -209,6 +214,7 @@ fun SearchCard(
                             isSearching = false
                             searchResults = emptyList()
                             onRouteQueryChange("")
+                            selectedRouteNo = null
                         },
                         label = { Text("Routes") }
                     )
@@ -221,6 +227,7 @@ fun SearchCard(
                     value = searchQuery,
                     onValueChange = { query ->
                         searchQuery = query
+                        selectedRouteNo = null
                         if (searchMode == SearchMode.Places) {
                             if (query.isNotBlank()) {
                                 isSearching = true
@@ -528,7 +535,7 @@ fun SearchCard(
                 }
                 else if (searchMode == SearchMode.Routes) {
                     when {
-                        isRouteSearchLoading -> {
+                        isRouteSuggestionsLoading -> {
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -543,15 +550,15 @@ fun SearchCard(
                         }
                         searchQuery.isBlank() -> {
                             Text(
-                                text = "Enter a route number to find matching nearby bus stops",
+                                text = "Enter a route number to search",
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontSize = 16.sp,
                                 modifier = Modifier.padding(16.dp)
                             )
                         }
-                        routeSearchResults.isEmpty() -> {
+                        routeSuggestions.isEmpty() -> {
                             Text(
-                                text = "No matching bus stops found",
+                                text = "No matching routes found",
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontSize = 16.sp,
                                 modifier = Modifier.padding(16.dp)
@@ -559,7 +566,7 @@ fun SearchCard(
                         }
                         else -> {
                             Text(
-                                text = "Route Matches (${routeSearchResults.size})",
+                                text = "Route (${routeSuggestions.size})",
                                 fontSize = 16.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = MaterialTheme.colorScheme.onSurface,
@@ -567,14 +574,54 @@ fun SearchCard(
                             )
                             Spacer(modifier = Modifier.height(8.dp))
                             LazyColumn {
-                                items(routeSearchResults) { busStop ->
-                                    BusStopResultItem(
-                                        busStop = busStop,
-                                        userLocation = userLocation,
+                                items(routeSuggestions) { routeNo ->
+                                    RouteSuggestionItem(
+                                        routeNo = routeNo,
                                         onClick = {
-                                            onBusStopSelected(busStop)
+                                            selectedRouteNo = routeNo
+                                            onRouteSelected(routeNo)
                                         }
                                     )
+                                }
+                            }
+
+                            if (selectedRouteNo != null) {
+                                Spacer(modifier = Modifier.height(12.dp))
+                                when {
+                                    isRouteSearchLoading -> {
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .height(80.dp),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            CircularProgressIndicator(
+                                                modifier = Modifier.size(28.dp),
+                                                color = MaterialTheme.colorScheme.primary
+                                            )
+                                        }
+                                    }
+                                    routeSearchResults.isNotEmpty() -> {
+                                        Text(
+                                            text = "Stops (${routeSearchResults.size})",
+                                            fontSize = 16.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = MaterialTheme.colorScheme.onSurface,
+                                            modifier = Modifier.padding(horizontal = 16.dp)
+                                        )
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        LazyColumn {
+                                            items(routeSearchResults) { busStop ->
+                                                BusStopResultItem(
+                                                    busStop = busStop,
+                                                    userLocation = userLocation,
+                                                    onClick = {
+                                                        onBusStopSelected(busStop)
+                                                    }
+                                                )
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -653,6 +700,39 @@ fun SearchCard(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun RouteSuggestionItem(
+    routeNo: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .clickable { onClick() }
+            .padding(12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = Icons.Default.LocationOn,
+            contentDescription = "Route",
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(24.dp)
+        )
+
+        Spacer(modifier = Modifier.width(12.dp))
+
+        Text(
+            text = routeNo,
+            color = MaterialTheme.colorScheme.onSurface,
+            fontSize = 16.sp,
+            fontWeight = FontWeight.Medium,
+            modifier = Modifier.weight(1f)
+        )
     }
 }
 

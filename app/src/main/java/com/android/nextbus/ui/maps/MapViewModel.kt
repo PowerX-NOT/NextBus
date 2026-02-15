@@ -5,6 +5,7 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.android.nextbus.data.model.BusStop
+import com.android.nextbus.data.network.BmtcRouteService
 import com.android.nextbus.data.network.NearbyBusStopService
 import com.android.nextbus.data.network.BusStopRouteService
 import com.google.android.gms.maps.model.LatLng
@@ -22,6 +23,7 @@ class MapViewModel : ViewModel() {
     
     private val nearbyBusStopService = NearbyBusStopService()
     private val busStopRouteService = BusStopRouteService()
+    private val bmtcRouteService = BmtcRouteService()
     
     // State for bus stops
     private val _busStops = MutableStateFlow<List<BusStop>>(emptyList())
@@ -64,10 +66,24 @@ class MapViewModel : ViewModel() {
     private val _isRouteSearchLoading = MutableStateFlow(false)
     val isRouteSearchLoading: StateFlow<Boolean> = _isRouteSearchLoading.asStateFlow()
 
+    private val _routeSuggestions = MutableStateFlow<List<String>>(emptyList())
+    val routeSuggestions: StateFlow<List<String>> = _routeSuggestions.asStateFlow()
+
+    private val _isRouteSuggestionsLoading = MutableStateFlow(false)
+    val isRouteSuggestionsLoading: StateFlow<Boolean> = _isRouteSuggestionsLoading.asStateFlow()
+
+    private val _selectedRouteNo = MutableStateFlow<String?>(null)
+    val selectedRouteNo: StateFlow<String?> = _selectedRouteNo.asStateFlow()
+
+    private val _routePolylines = MutableStateFlow<List<com.android.nextbus.data.network.BmtcRouteService.RoutePolyline>>(emptyList())
+    val routePolylines: StateFlow<List<com.android.nextbus.data.network.BmtcRouteService.RoutePolyline>> = _routePolylines.asStateFlow()
+
+    private val _isRoutePolylineLoading = MutableStateFlow(false)
+    val isRoutePolylineLoading: StateFlow<Boolean> = _isRoutePolylineLoading.asStateFlow()
+
     // Last search location to prevent duplicate searches
     private var lastSearchLocation: LatLng? = null
 
-    private val routesCacheByPlaceId = mutableMapOf<String, List<String>>()
     private var routeSearchJob: Job? = null
     
     fun searchNearbyBusStops(location: LatLng) {
@@ -106,6 +122,71 @@ class MapViewModel : ViewModel() {
                 Log.e(TAG, "Unexpected error in searchNearbyBusStops", e)
             } finally {
                 _isLoading.value = false
+            }
+        }
+    }
+
+    fun selectRoute(routeNo: String) {
+        routeSearchJob?.cancel()
+
+        val normalized = routeNo.trim()
+        if (normalized.isBlank()) {
+            clearSelectedRoute()
+            return
+        }
+
+        _selectedRouteNo.value = normalized
+
+        routeSearchJob = viewModelScope.launch {
+            try {
+                _isRouteSearchLoading.value = true
+                _isRoutePolylineLoading.value = true
+                _routeSearchResults.value = emptyList()
+                _routePolylines.value = emptyList()
+
+                val stopsResult = bmtcRouteService.searchRouteStops(normalized)
+                _routeSearchResults.value = stopsResult.getOrElse { emptyList() }
+
+                val polyResult = bmtcRouteService.fetchRoutePolylines(normalized)
+                _routePolylines.value = polyResult.getOrElse { emptyList() }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error selecting route: ${e.message}", e)
+            } finally {
+                _isRouteSearchLoading.value = false
+                _isRoutePolylineLoading.value = false
+            }
+        }
+    }
+
+    fun clearSelectedRoute() {
+        _selectedRouteNo.value = null
+        _routeSearchResults.value = emptyList()
+        _isRouteSearchLoading.value = false
+        _routePolylines.value = emptyList()
+        _isRoutePolylineLoading.value = false
+    }
+
+    fun fetchStopsForRoute(routeNo: String) {
+        routeSearchJob?.cancel()
+
+        val normalized = routeNo.trim()
+        if (normalized.isBlank()) {
+            _routeSearchResults.value = emptyList()
+            _isRouteSearchLoading.value = false
+            return
+        }
+
+        routeSearchJob = viewModelScope.launch {
+            try {
+                _isRouteSearchLoading.value = true
+                _routeSearchResults.value = emptyList()
+
+                val result = bmtcRouteService.searchRouteStops(normalized)
+                _routeSearchResults.value = result.getOrElse { emptyList() }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error fetching stops for route: ${e.message}", e)
+            } finally {
+                _isRouteSearchLoading.value = false
             }
         }
     }
@@ -148,47 +229,22 @@ class MapViewModel : ViewModel() {
 
         val normalizedQuery = routeQuery.trim()
         if (normalizedQuery.isBlank()) {
-            _routeSearchResults.value = emptyList()
-            _isRouteSearchLoading.value = false
-            return
-        }
-
-        val currentStops = _busStops.value
-        if (currentStops.isEmpty()) {
-            _routeSearchResults.value = emptyList()
-            _isRouteSearchLoading.value = false
+            _routeSuggestions.value = emptyList()
+            _isRouteSuggestionsLoading.value = false
             return
         }
 
         routeSearchJob = viewModelScope.launch {
             try {
-                _isRouteSearchLoading.value = true
-                _routeSearchResults.value = emptyList()
+                _isRouteSuggestionsLoading.value = true
+                _routeSuggestions.value = emptyList()
 
-                val matches = mutableListOf<BusStop>()
-                val queryLower = normalizedQuery.lowercase()
-
-                for (stop in currentStops) {
-                    val placeId = stop.placeId ?: continue
-
-                    val stopRoutes = routesCacheByPlaceId[placeId] ?: run {
-                        val result = busStopRouteService.getRoutesForPlace(placeId)
-                        val routes = result.getOrElse { emptyList() }
-                        routesCacheByPlaceId[placeId] = routes
-                        routes
-                    }
-
-                    val hasMatch = stopRoutes.any { it.lowercase().contains(queryLower) }
-                    if (hasMatch) {
-                        matches.add(stop)
-                    }
-                }
-
-                _routeSearchResults.value = matches
+                val result = bmtcRouteService.searchRoutes(normalizedQuery)
+                _routeSuggestions.value = result.getOrElse { emptyList() }.map { it.routeNo }
             } catch (e: Exception) {
                 Log.e(TAG, "Error searching bus stops by route: ${e.message}", e)
             } finally {
-                _isRouteSearchLoading.value = false
+                _isRouteSuggestionsLoading.value = false
             }
         }
     }
@@ -227,6 +283,11 @@ class MapViewModel : ViewModel() {
         lastSearchLocation = null
         _routeSearchResults.value = emptyList()
         _isRouteSearchLoading.value = false
+        _routeSuggestions.value = emptyList()
+        _isRouteSuggestionsLoading.value = false
+        _selectedRouteNo.value = null
+        _routePolylines.value = emptyList()
+        _isRoutePolylineLoading.value = false
     }
     
     // Calculate distance between two LatLng points in meters

@@ -42,6 +42,7 @@ import com.google.accompanist.permissions.rememberPermissionState
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
+import com.google.android.gms.maps.model.LatLngBounds
 import com.google.android.gms.maps.model.MapStyleOptions
 import com.google.maps.android.compose.*
 import com.android.nextbus.ui.components.SearchCard
@@ -110,6 +111,10 @@ fun GoogleMapScreen(
     val isRoutesLoading by viewModel.isRoutesLoading.collectAsState()
     val routeSearchResults by viewModel.routeSearchResults.collectAsState()
     val isRouteSearchLoading by viewModel.isRouteSearchLoading.collectAsState()
+    val routeSuggestions by viewModel.routeSuggestions.collectAsState()
+    val isRouteSuggestionsLoading by viewModel.isRouteSuggestionsLoading.collectAsState()
+    val selectedRouteNo by viewModel.selectedRouteNo.collectAsState()
+    val routePolylines by viewModel.routePolylines.collectAsState()
     
     // Location permission
     val locationPermissionState = rememberPermissionState(
@@ -153,16 +158,41 @@ fun GoogleMapScreen(
         animationSpec = tween(durationMillis = 300),
         label = "map_bottom_padding"
     )
+
+    val density = LocalDensity.current
     
     val cameraPositionState = rememberCameraPositionState {
         position = CameraPosition.fromLatLngZoom(currentLocation, 15f)
     }
+
+    LaunchedEffect(routePolylines) {
+        val allPoints = routePolylines.flatMap { it.points }
+        if (allPoints.size < 2) return@LaunchedEffect
+
+        val boundsBuilder = LatLngBounds.builder()
+        allPoints.forEach { boundsBuilder.include(it) }
+        val bounds = boundsBuilder.build()
+
+        // Keep some padding so the route isn't clipped by UI (search card, status bar)
+        val paddingPx = with(density) { 72.dp.toPx() }.toInt()
+        try {
+            cameraPositionState.animate(
+                CameraUpdateFactory.newLatLngBounds(bounds, paddingPx),
+                1000
+            )
+        } catch (_: Exception) {
+            // Ignore bounds animation failures (can happen if map not laid out yet)
+        }
+    }
     
     // Handle back button behavior
     BackHandler(
-        enabled = isSearchCardExpanded || isSearchCardMinimized || busStops.isNotEmpty() || selectedBusStop != null
+        enabled = isSearchCardExpanded || isSearchCardMinimized || busStops.isNotEmpty() || selectedBusStop != null || selectedRouteNo != null
     ) {
         when {
+            selectedRouteNo != null -> {
+                viewModel.clearSelectedRoute()
+            }
             // If a bus stop is selected, clear selection first
             selectedBusStop != null -> {
                 viewModel.clearSelectedBusStop()
@@ -270,6 +300,15 @@ fun GoogleMapScreen(
                 bottom = mapBottomPadding // Dynamically adjust for search card
             )
         ) {
+            // Selected route polyline(s)
+            routePolylines.forEach { routeLine ->
+                Polyline(
+                    points = routeLine.points,
+                    color = if (routeLine.direction == 0) Color(0xFF1E88E5) else Color(0xFFE53935),
+                    width = 10f
+                )
+            }
+
             // Bus stop markers with custom pins
             // If a bus stop is selected, only show that one. Otherwise show all.
             val markersToShow = selectedBusStop?.let { selected ->
@@ -455,6 +494,10 @@ fun GoogleMapScreen(
             onRouteQueryChange = { query ->
                 viewModel.searchBusStopsByRoute(query)
             },
+            onRouteSelected = { routeNo ->
+                viewModel.selectRoute(routeNo)
+                viewModel.setSearchCardExpanded(false)
+            },
             onBusStopSelected = { busStop ->
                 viewModel.selectBusStop(busStop)
                 // Expand search card to show bus stop details
@@ -473,10 +516,12 @@ fun GoogleMapScreen(
                 }
             },
             busStops = busStops,
+            routeSuggestions = routeSuggestions,
             routeSearchResults = routeSearchResults,
             selectedBusStop = selectedBusStop,
             isLoadingBusStops = isLoading,
             isRouteSearchLoading = isRouteSearchLoading,
+            isRouteSuggestionsLoading = isRouteSuggestionsLoading,
             userLocation = userLocation,
             routes = routes,
             isLoadingRoutes = isRoutesLoading

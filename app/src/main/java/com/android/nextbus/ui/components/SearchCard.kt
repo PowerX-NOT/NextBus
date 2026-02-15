@@ -118,6 +118,12 @@ fun SearchCard(
         }
     }
     
+    LaunchedEffect(busStops, selectedBusStop, selectedRouteNo) {
+        if (selectedBusStop == null && selectedRouteNo == null && busStops.isNotEmpty()) {
+            searchMode = SearchMode.Places
+        }
+    }
+    
     // Function to add item to recent searches
     fun addToRecentSearches(item: PlaceSearchResult) {
         val updatedRecents = listOf(item) + recentSearches.filter { it.name != item.name }
@@ -449,13 +455,11 @@ fun SearchCard(
                         }
                     }
                 }
-                // Selected bus stop details or bus stop results
                 else if (selectedBusStop != null) {
-                    // Show selected bus stop details
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(16.dp)
+                            .padding(horizontal = 16.dp)
                     ) {
                         // Address/Vicinity
                         if (selectedBusStop.vicinity.isNotEmpty()) {
@@ -483,7 +487,7 @@ fun SearchCard(
                                 modifier = Modifier.padding(bottom = 8.dp)
                             )
                         }
-                        
+
                         // Rating if available
                         selectedBusStop.rating?.let { rating ->
                             Text(
@@ -504,6 +508,7 @@ fun SearchCard(
                                     modifier = Modifier.padding(bottom = 8.dp)
                                 )
                             }
+
                             routes.isNotEmpty() -> {
                                 Text(
                                     text = "Routes (${routes.size})",
@@ -519,18 +524,21 @@ fun SearchCard(
                                         .padding(bottom = 12.dp)
                                 ) {
                                     items(routes) { route ->
-                                        RouteChip(label = route)
+                                        RouteChip(
+                                            label = route,
+                                            onClick = { onRouteSelected(route) }
+                                        )
                                     }
                                 }
                             }
                         }
-                        
+
                         // Types/Categories
                         if (selectedBusStop.types.isNotEmpty()) {
                             Text(
-                                text = selectedBusStop.types.joinToString(", ") { 
-                                    it.replace("_", " ").replaceFirstChar { char -> 
-                                        if (char.isLowerCase()) char.titlecase() else char.toString() 
+                                text = selectedBusStop.types.joinToString(", ") {
+                                    it.replace("_", " ").replaceFirstChar { char ->
+                                        if (char.isLowerCase()) char.titlecase() else char.toString()
                                     }
                                 },
                                 style = MaterialTheme.typography.bodySmall,
@@ -538,7 +546,7 @@ fun SearchCard(
                                 modifier = Modifier.padding(bottom = 16.dp)
                             )
                         }
-                        
+
                         // Location coordinates
                         Text(
                             text = "Location: ${String.format("%.6f", selectedBusStop.location.latitude)}, ${String.format("%.6f", selectedBusStop.location.longitude)}",
@@ -546,19 +554,6 @@ fun SearchCard(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
                         )
-                    }
-                }
-                else if (busStops.isNotEmpty()) {
-                    LazyColumn {
-                        items(busStops) { busStop ->
-                            BusStopResultItem(
-                                busStop = busStop,
-                                userLocation = userLocation,
-                                onClick = {
-                                    onBusStopSelected(busStop)
-                                }
-                            )
-                        }
                     }
                 }
                 else if (searchMode == SearchMode.Routes) {
@@ -718,6 +713,19 @@ fun SearchCard(
                         }
                     }
                 }
+                else if (busStops.isNotEmpty()) {
+                    LazyColumn {
+                        items(busStops) { busStop ->
+                            BusStopResultItem(
+                                busStop = busStop,
+                                userLocation = userLocation,
+                                onClick = {
+                                    onBusStopSelected(busStop)
+                                }
+                            )
+                        }
+                    }
+                }
                 // Search results or suggestions
                 else if (searchQuery.isNotEmpty()) {
                     if (isSearching) {
@@ -830,10 +838,18 @@ private fun RouteSuggestionItem(
 @Composable
 private fun RouteChip(
     label: String,
+    onClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     Surface(
-        modifier = modifier,
+        modifier = modifier
+            .then(
+                if (onClick != null) {
+                    Modifier.clickable { onClick() }
+                } else {
+                    Modifier
+                }
+            ),
         shape = RoundedCornerShape(12.dp),
         color = MaterialTheme.colorScheme.surfaceVariant,
         tonalElevation = 1.dp,

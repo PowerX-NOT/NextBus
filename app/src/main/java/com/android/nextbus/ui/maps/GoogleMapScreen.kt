@@ -102,6 +102,7 @@ fun GoogleMapScreen(
     // Collect state from ViewModel
     val busStops by viewModel.busStops.collectAsState()
     val selectedBusStop by viewModel.selectedBusStop.collectAsState()
+    val highlightedBusStop by viewModel.highlightedBusStop.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val error by viewModel.error.collectAsState()
     val isSearchCardExpanded by viewModel.isSearchCardExpanded.collectAsState()
@@ -214,6 +215,10 @@ fun GoogleMapScreen(
             }
             selectedRouteNo != null -> {
                 viewModel.clearSelectedRoute()
+                highlightedBusStop?.let {
+                    viewModel.selectBusStop(it)
+                    viewModel.setSearchCardExpanded(true)
+                }
             }
             // If there are bus stops visible, clear them
             busStops.isNotEmpty() -> {
@@ -336,13 +341,19 @@ fun GoogleMapScreen(
             }
 
             // Bus stop markers with custom pins
-            // If a bus stop is selected, only show that one. Otherwise show all.
-            val markersToShow = selectedBusStop?.let { selected ->
-                listOf(selected)
-            } ?: busStops
+            // If a bus stop is selected, only show that one.
+            // If a route is selected (route details), hide nearby markers to avoid clutter.
+            // Otherwise show all nearby markers.
+            val markersToShow: List<BusStop> = when {
+                selectedBusStop != null -> listOf(selectedBusStop!!)
+                selectedRouteNo != null -> highlightedBusStop?.let { listOf(it) } ?: emptyList()
+                else -> busStops
+            }
             
             markersToShow.forEach { busStop ->
-                val customIcon = if (selectedBusStop?.id == busStop.id) {
+                val isSelectedMarker = (selectedBusStop?.id == busStop.id) || (highlightedBusStop?.id == busStop.id)
+
+                val customIcon = if (isSelectedMarker) {
                     // Use yellow pin for selected bus stop
                     bitmapDescriptorFromVector(context, R.drawable.bus_stop_yellow, 160, 160)
                 } else {
@@ -355,7 +366,7 @@ fun GoogleMapScreen(
                     title = busStop.name,
                     snippet = busStop.vicinity,
                     icon = customIcon ?: BitmapDescriptorFactory.defaultMarker(
-                        if (selectedBusStop?.id == busStop.id) {
+                        if (isSelectedMarker) {
                             BitmapDescriptorFactory.HUE_YELLOW // Fallback to yellow for selected
                         } else {
                             BitmapDescriptorFactory.HUE_RED // Fallback to red for unselected
@@ -521,6 +532,7 @@ fun GoogleMapScreen(
                 viewModel.searchBusStopsByRoute(query)
             },
             onRouteSelected = { routeNo ->
+                viewModel.clearSelectedBusStop(keepHighlighted = true)
                 viewModel.selectRoute(routeNo)
                 viewModel.setSearchCardExpanded(true)
             },

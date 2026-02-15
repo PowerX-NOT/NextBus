@@ -32,6 +32,10 @@ class MapViewModel : ViewModel() {
     // State for selected bus stop
     private val _selectedBusStop = MutableStateFlow<BusStop?>(null)
     val selectedBusStop: StateFlow<BusStop?> = _selectedBusStop.asStateFlow()
+
+    // Separate marker highlight state so we can keep a bus stand pin visible while viewing route details
+    private val _highlightedBusStop = MutableStateFlow<BusStop?>(null)
+    val highlightedBusStop: StateFlow<BusStop?> = _highlightedBusStop.asStateFlow()
     
     // State for loading
     private val _isLoading = MutableStateFlow(false)
@@ -217,6 +221,7 @@ class MapViewModel : ViewModel() {
     
     fun selectBusStop(busStop: BusStop) {
         _selectedBusStop.value = busStop
+        _highlightedBusStop.value = busStop
         Log.d(TAG, "Selected bus stop: ${busStop.name}")
 
         viewModelScope.launch {
@@ -323,8 +328,11 @@ class MapViewModel : ViewModel() {
         }
     }
     
-    fun clearSelectedBusStop() {
+    fun clearSelectedBusStop(keepHighlighted: Boolean = false) {
         _selectedBusStop.value = null
+        if (!keepHighlighted) {
+            _highlightedBusStop.value = null
+        }
         _routes.value = emptyList()
         _isRoutesLoading.value = false
     }
@@ -354,6 +362,7 @@ class MapViewModel : ViewModel() {
     fun clearBusStops() {
         _busStops.value = emptyList()
         _selectedBusStop.value = null
+        _highlightedBusStop.value = null
         lastSearchLocation = null
         _routeSearchResults.value = emptyList()
         _isRouteSearchLoading.value = false

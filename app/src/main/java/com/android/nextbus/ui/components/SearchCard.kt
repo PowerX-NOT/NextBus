@@ -54,6 +54,8 @@ data class PlaceSearchResult(
     val placeId: String? = null
 )
 
+private enum class SearchMode { Places, Routes }
+
 @Composable
 fun SearchCard(
     modifier: Modifier = Modifier,
@@ -65,10 +67,13 @@ fun SearchCard(
     onFavoritesClick: () -> Unit = {},
     onNearbyClick: () -> Unit = {},
     onPlaceSelected: (PlaceSearchResult) -> Unit = {},
+    onRouteQueryChange: (String) -> Unit = {},
     onBusStopSelected: (BusStop) -> Unit = {},
     busStops: List<BusStop> = emptyList(),
+    routeSearchResults: List<BusStop> = emptyList(),
     selectedBusStop: BusStop? = null,
     isLoadingBusStops: Boolean = false,
+    isRouteSearchLoading: Boolean = false,
     userLocation: com.google.android.gms.maps.model.LatLng? = null,
     routes: List<String> = emptyList(),
     isLoadingRoutes: Boolean = false
@@ -78,6 +83,7 @@ fun SearchCard(
     var searchResults by remember { mutableStateOf<List<PlaceSearchResult>>(emptyList()) }
     var isSearching by remember { mutableStateOf(false) }
     var recentSearches by remember { mutableStateOf<List<PlaceSearchResult>>(emptyList()) }
+    var searchMode by remember { mutableStateOf(SearchMode.Places) }
     
     // Function to add item to recent searches
     fun addToRecentSearches(item: PlaceSearchResult) {
@@ -180,25 +186,67 @@ fun SearchCard(
                     )
                 }
             } else if (isExpanded && busStops.isEmpty()) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    FilterChip(
+                        selected = searchMode == SearchMode.Places,
+                        onClick = {
+                            searchMode = SearchMode.Places
+                            searchQuery = ""
+                            isSearching = false
+                            searchResults = emptyList()
+                            onRouteQueryChange("")
+                        },
+                        label = { Text("Places") }
+                    )
+                    FilterChip(
+                        selected = searchMode == SearchMode.Routes,
+                        onClick = {
+                            searchMode = SearchMode.Routes
+                            searchQuery = ""
+                            isSearching = false
+                            searchResults = emptyList()
+                            onRouteQueryChange("")
+                        },
+                        label = { Text("Routes") }
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
                 // Active search field when expanded
                 OutlinedTextField(
                     value = searchQuery,
                     onValueChange = { query ->
                         searchQuery = query
-                        if (query.isNotBlank()) {
-                            isSearching = true
-                            println("Starting search for: $query")
-                            searchPlaces(context, query) { results ->
-                                println("Search completed. Results count: ${results.size}")
-                                searchResults = results
+                        if (searchMode == SearchMode.Places) {
+                            if (query.isNotBlank()) {
+                                isSearching = true
+                                println("Starting search for: $query")
+                                searchPlaces(context, query) { results ->
+                                    println("Search completed. Results count: ${results.size}")
+                                    searchResults = results
+                                    isSearching = false
+                                }
+                            } else {
+                                searchResults = emptyList()
                                 isSearching = false
                             }
                         } else {
-                            searchResults = emptyList()
-                            isSearching = false
+                            onRouteQueryChange(query)
                         }
                     },
-                    placeholder = { Text("Search for places, routes, or stops...") },
+                    placeholder = {
+                        Text(
+                            if (searchMode == SearchMode.Places) {
+                                "Search for places..."
+                            } else {
+                                "Search bus stops by route (e.g. 500D)"
+                            }
+                        )
+                    },
                     leadingIcon = {
                         Icon(
                             imageVector = Icons.Default.Search,
@@ -475,6 +523,60 @@ fun SearchCard(
                                     onBusStopSelected(busStop)
                                 }
                             )
+                        }
+                    }
+                }
+                else if (searchMode == SearchMode.Routes) {
+                    when {
+                        isRouteSearchLoading -> {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(100.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(32.dp),
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
+                        searchQuery.isBlank() -> {
+                            Text(
+                                text = "Enter a route number to find matching nearby bus stops",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontSize = 16.sp,
+                                modifier = Modifier.padding(16.dp)
+                            )
+                        }
+                        routeSearchResults.isEmpty() -> {
+                            Text(
+                                text = "No matching bus stops found",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontSize = 16.sp,
+                                modifier = Modifier.padding(16.dp)
+                            )
+                        }
+                        else -> {
+                            Text(
+                                text = "Route Matches (${routeSearchResults.size})",
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.padding(horizontal = 16.dp)
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            LazyColumn {
+                                items(routeSearchResults) { busStop ->
+                                    BusStopResultItem(
+                                        busStop = busStop,
+                                        userLocation = userLocation,
+                                        onClick = {
+                                            onBusStopSelected(busStop)
+                                        }
+                                    )
+                                }
+                            }
                         }
                     }
                 }

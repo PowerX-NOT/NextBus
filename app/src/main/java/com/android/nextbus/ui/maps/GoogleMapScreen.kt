@@ -108,6 +108,8 @@ fun GoogleMapScreen(
     val userLocationFromViewModel by viewModel.userLocation.collectAsState()
     val routes by viewModel.routes.collectAsState()
     val isRoutesLoading by viewModel.isRoutesLoading.collectAsState()
+    val routeSearchResults by viewModel.routeSearchResults.collectAsState()
+    val isRouteSearchLoading by viewModel.isRouteSearchLoading.collectAsState()
     
     // Location permission
     val locationPermissionState = rememberPermissionState(
@@ -450,6 +452,9 @@ fun GoogleMapScreen(
                     }
                 }
             },
+            onRouteQueryChange = { query ->
+                viewModel.searchBusStopsByRoute(query)
+            },
             onBusStopSelected = { busStop ->
                 viewModel.selectBusStop(busStop)
                 // Expand search card to show bus stop details
@@ -468,8 +473,10 @@ fun GoogleMapScreen(
                 }
             },
             busStops = busStops,
+            routeSearchResults = routeSearchResults,
             selectedBusStop = selectedBusStop,
             isLoadingBusStops = isLoading,
+            isRouteSearchLoading = isRouteSearchLoading,
             userLocation = userLocation,
             routes = routes,
             isLoadingRoutes = isRoutesLoading

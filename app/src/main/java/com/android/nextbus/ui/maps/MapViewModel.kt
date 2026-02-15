@@ -8,6 +8,7 @@ import com.android.nextbus.data.model.BusStop
 import com.android.nextbus.data.network.NearbyBusStopService
 import com.android.nextbus.data.network.BusStopRouteService
 import com.google.android.gms.maps.model.LatLng
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -55,9 +56,19 @@ class MapViewModel : ViewModel() {
 
     private val _isRoutesLoading = MutableStateFlow(false)
     val isRoutesLoading: StateFlow<Boolean> = _isRoutesLoading.asStateFlow()
-    
+
+    // Route search results
+    private val _routeSearchResults = MutableStateFlow<List<BusStop>>(emptyList())
+    val routeSearchResults: StateFlow<List<BusStop>> = _routeSearchResults.asStateFlow()
+
+    private val _isRouteSearchLoading = MutableStateFlow(false)
+    val isRouteSearchLoading: StateFlow<Boolean> = _isRouteSearchLoading.asStateFlow()
+
     // Last search location to prevent duplicate searches
     private var lastSearchLocation: LatLng? = null
+
+    private val routesCacheByPlaceId = mutableMapOf<String, List<String>>()
+    private var routeSearchJob: Job? = null
     
     fun searchNearbyBusStops(location: LatLng) {
         // Prevent duplicate searches for the same location
@@ -131,6 +142,56 @@ class MapViewModel : ViewModel() {
             _isRoutesLoading.value = false
         }
     }
+
+    fun searchBusStopsByRoute(routeQuery: String) {
+        routeSearchJob?.cancel()
+
+        val normalizedQuery = routeQuery.trim()
+        if (normalizedQuery.isBlank()) {
+            _routeSearchResults.value = emptyList()
+            _isRouteSearchLoading.value = false
+            return
+        }
+
+        val currentStops = _busStops.value
+        if (currentStops.isEmpty()) {
+            _routeSearchResults.value = emptyList()
+            _isRouteSearchLoading.value = false
+            return
+        }
+
+        routeSearchJob = viewModelScope.launch {
+            try {
+                _isRouteSearchLoading.value = true
+                _routeSearchResults.value = emptyList()
+
+                val matches = mutableListOf<BusStop>()
+                val queryLower = normalizedQuery.lowercase()
+
+                for (stop in currentStops) {
+                    val placeId = stop.placeId ?: continue
+
+                    val stopRoutes = routesCacheByPlaceId[placeId] ?: run {
+                        val result = busStopRouteService.getRoutesForPlace(placeId)
+                        val routes = result.getOrElse { emptyList() }
+                        routesCacheByPlaceId[placeId] = routes
+                        routes
+                    }
+
+                    val hasMatch = stopRoutes.any { it.lowercase().contains(queryLower) }
+                    if (hasMatch) {
+                        matches.add(stop)
+                    }
+                }
+
+                _routeSearchResults.value = matches
+            } catch (e: Exception) {
+                Log.e(TAG, "Error searching bus stops by route: ${e.message}", e)
+            } finally {
+                _isRouteSearchLoading.value = false
+            }
+        }
+    }
     
     fun clearSelectedBusStop() {
         _selectedBusStop.value = null
@@ -164,6 +225,8 @@ class MapViewModel : ViewModel() {
         _busStops.value = emptyList()
         _selectedBusStop.value = null
         lastSearchLocation = null
+        _routeSearchResults.value = emptyList()
+        _isRouteSearchLoading.value = false
     }
     
     // Calculate distance between two LatLng points in meters

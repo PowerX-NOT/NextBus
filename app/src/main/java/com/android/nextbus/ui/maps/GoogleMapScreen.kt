@@ -192,12 +192,15 @@ fun GoogleMapScreen(
         enabled = isSearchCardExpanded || isSearchCardMinimized || busStops.isNotEmpty() || selectedBusStop != null || selectedRouteNo != null
     ) {
         when {
-            selectedRouteNo != null -> {
-                viewModel.clearSelectedRoute()
-            }
             // If a bus stop is selected, clear selection first
             selectedBusStop != null -> {
                 viewModel.clearSelectedBusStop()
+                if (selectedRouteNo != null) {
+                    viewModel.setSearchCardExpanded(true)
+                }
+            }
+            selectedRouteNo != null -> {
+                viewModel.clearSelectedRoute()
             }
             // If there are bus stops visible, clear them
             busStops.isNotEmpty() -> {

@@ -73,6 +73,11 @@ fun SearchCard(
     busStops: List<BusStop> = emptyList(),
     routeSuggestions: List<String> = emptyList(),
     routeSearchResults: List<BusStop> = emptyList(),
+    selectedRouteNo: String? = null,
+    isUpRouteVisible: Boolean = true,
+    isDownRouteVisible: Boolean = true,
+    onUpRouteVisibleChange: (Boolean) -> Unit = {},
+    onDownRouteVisibleChange: (Boolean) -> Unit = {},
     selectedBusStop: BusStop? = null,
     isLoadingBusStops: Boolean = false,
     isRouteSearchLoading: Boolean = false,
@@ -87,7 +92,31 @@ fun SearchCard(
     var isSearching by remember { mutableStateOf(false) }
     var recentSearches by remember { mutableStateOf<List<PlaceSearchResult>>(emptyList()) }
     var searchMode by remember { mutableStateOf(SearchMode.Places) }
-    var selectedRouteNo by remember { mutableStateOf<String?>(null) }
+
+    val isShowingRouteStops = selectedRouteNo != null && (isRouteSearchLoading || routeSearchResults.isNotEmpty())
+
+    val filteredRouteStops = remember(routeSearchResults, isUpRouteVisible, isDownRouteVisible) {
+        val selectedDirection = when {
+            isUpRouteVisible -> 0
+            isDownRouteVisible -> 1
+            else -> null
+        }
+
+        if (selectedDirection == null) {
+            emptyList()
+        } else {
+            routeSearchResults.filter { stop ->
+                val direction = stop.id.split(":").getOrNull(2)?.toIntOrNull()
+                direction == selectedDirection
+            }
+        }
+    }
+
+    LaunchedEffect(selectedRouteNo) {
+        if (selectedRouteNo != null) {
+            searchMode = SearchMode.Routes
+        }
+    }
     
     // Function to add item to recent searches
     fun addToRecentSearches(item: PlaceSearchResult) {
@@ -160,7 +189,7 @@ fun SearchCard(
             Spacer(modifier = Modifier.height(12.dp))
             
             // Search bar - hide when bus stops are shown
-            if (!isExpanded && busStops.isEmpty()) {
+            if (!isExpanded && busStops.isEmpty() && !isShowingRouteStops) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -189,7 +218,7 @@ fun SearchCard(
                         modifier = Modifier.weight(1f)
                     )
                 }
-            } else if (isExpanded && busStops.isEmpty()) {
+            } else if (isExpanded && busStops.isEmpty() && !isShowingRouteStops) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -202,7 +231,6 @@ fun SearchCard(
                             isSearching = false
                             searchResults = emptyList()
                             onRouteQueryChange("")
-                            selectedRouteNo = null
                         },
                         label = { Text("Places") }
                     )
@@ -214,7 +242,6 @@ fun SearchCard(
                             isSearching = false
                             searchResults = emptyList()
                             onRouteQueryChange("")
-                            selectedRouteNo = null
                         },
                         label = { Text("Routes") }
                     )
@@ -227,7 +254,6 @@ fun SearchCard(
                     value = searchQuery,
                     onValueChange = { query ->
                         searchQuery = query
-                        selectedRouteNo = null
                         if (searchMode == SearchMode.Places) {
                             if (query.isNotBlank()) {
                                 isSearching = true
@@ -292,7 +318,7 @@ fun SearchCard(
             Spacer(modifier = Modifier.height(16.dp))
             
             // Quick actions - hide favorites when bus stops are shown
-            if (busStops.isEmpty()) {
+            if (busStops.isEmpty() && !isShowingRouteStops) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(16.dp)
@@ -356,12 +382,14 @@ fun SearchCard(
             }
             
             // Show heading for bus stops or selected bus stop with divider below
-            if (busStops.isNotEmpty() || selectedBusStop != null) {
+            if (busStops.isNotEmpty() || selectedBusStop != null || isShowingRouteStops) {
                 Spacer(modifier = Modifier.height(4.dp))
                 
                 Text(
                     text = if (selectedBusStop != null) {
                         selectedBusStop.name
+                    } else if (isShowingRouteStops && selectedRouteNo != null) {
+                        "${selectedRouteNo} (${filteredRouteStops.size})"
                     } else {
                         "Nearby Bus Stations (${busStops.size})"
                     },
@@ -534,93 +562,156 @@ fun SearchCard(
                     }
                 }
                 else if (searchMode == SearchMode.Routes) {
-                    when {
-                        isRouteSuggestionsLoading -> {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(100.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(32.dp),
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                            }
-                        }
-                        searchQuery.isBlank() -> {
+                    if (selectedRouteNo != null) {
+                        Column(modifier = Modifier.fillMaxWidth()) {
                             Text(
-                                text = "Enter a route number to search",
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                fontSize = 16.sp,
-                                modifier = Modifier.padding(16.dp)
-                            )
-                        }
-                        routeSuggestions.isEmpty() -> {
-                            Text(
-                                text = "No matching routes found",
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                fontSize = 16.sp,
-                                modifier = Modifier.padding(16.dp)
-                            )
-                        }
-                        else -> {
-                            Text(
-                                text = "Route (${routeSuggestions.size})",
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.SemiBold,
+                                text = selectedRouteNo,
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface,
                                 modifier = Modifier.padding(horizontal = 16.dp)
                             )
+
                             Spacer(modifier = Modifier.height(8.dp))
-                            LazyColumn {
-                                items(routeSuggestions) { routeNo ->
-                                    RouteSuggestionItem(
-                                        routeNo = routeNo,
-                                        onClick = {
-                                            selectedRouteNo = routeNo
-                                            onRouteSelected(routeNo)
+
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                FilterChip(
+                                    selected = isUpRouteVisible,
+                                    onClick = { onUpRouteVisibleChange(true) },
+                                    label = {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(10.dp)
+                                                    .clip(RoundedCornerShape(10.dp))
+                                                    .background(Color(0xFF1E88E5))
+                                            )
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text("UP")
                                         }
+                                    }
+                                )
+
+                                FilterChip(
+                                    selected = isDownRouteVisible,
+                                    onClick = { onDownRouteVisibleChange(true) },
+                                    label = {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(10.dp)
+                                                    .clip(RoundedCornerShape(10.dp))
+                                                    .background(Color(0xFFE53935))
+                                            )
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text("DOWN")
+                                        }
+                                    }
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        when {
+                            isRouteSearchLoading -> {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(80.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(28.dp),
+                                        color = MaterialTheme.colorScheme.primary
                                     )
                                 }
                             }
 
-                            if (selectedRouteNo != null) {
-                                Spacer(modifier = Modifier.height(12.dp))
-                                when {
-                                    isRouteSearchLoading -> {
-                                        Box(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .height(80.dp),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            CircularProgressIndicator(
-                                                modifier = Modifier.size(28.dp),
-                                                color = MaterialTheme.colorScheme.primary
-                                            )
-                                        }
-                                    }
-                                    routeSearchResults.isNotEmpty() -> {
-                                        Text(
-                                            text = "Stops (${routeSearchResults.size})",
-                                            fontSize = 16.sp,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = MaterialTheme.colorScheme.onSurface,
-                                            modifier = Modifier.padding(horizontal = 16.dp)
-                                        )
-                                        Spacer(modifier = Modifier.height(8.dp))
-                                        LazyColumn {
-                                            items(routeSearchResults) { busStop ->
-                                                BusStopResultItem(
-                                                    busStop = busStop,
-                                                    userLocation = userLocation,
-                                                    onClick = {
-                                                        onBusStopSelected(busStop)
-                                                    }
-                                                )
+                            routeSearchResults.isNotEmpty() -> {
+                                Text(
+                                    text = "Stops (${filteredRouteStops.size})",
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    modifier = Modifier.padding(horizontal = 16.dp)
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                LazyColumn(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .weight(1f, fill = true)
+                                ) {
+                                    items(filteredRouteStops) { busStop ->
+                                        BusStopResultItem(
+                                            busStop = busStop,
+                                            userLocation = userLocation,
+                                            onClick = {
+                                                onBusStopSelected(busStop)
                                             }
-                                        }
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        when {
+                            isRouteSuggestionsLoading -> {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(100.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(32.dp),
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                            }
+                            searchQuery.isBlank() -> {
+                                Text(
+                                    text = "Enter a route number to search",
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    fontSize = 16.sp,
+                                    modifier = Modifier.padding(16.dp)
+                                )
+                            }
+                            routeSuggestions.isEmpty() -> {
+                                Text(
+                                    text = "No matching routes found",
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    fontSize = 16.sp,
+                                    modifier = Modifier.padding(16.dp)
+                                )
+                            }
+                            else -> {
+                                Text(
+                                    text = "Route (${routeSuggestions.size})",
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    modifier = Modifier.padding(horizontal = 16.dp)
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                LazyColumn(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .weight(1f, fill = true)
+                                ) {
+                                    items(routeSuggestions) { routeNo ->
+                                        RouteSuggestionItem(
+                                            routeNo = routeNo,
+                                            onClick = {
+                                                onRouteSelected(routeNo)
+                                            }
+                                        )
                                     }
                                 }
                             }

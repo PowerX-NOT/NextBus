@@ -115,6 +115,8 @@ fun GoogleMapScreen(
     val isRouteSuggestionsLoading by viewModel.isRouteSuggestionsLoading.collectAsState()
     val selectedRouteNo by viewModel.selectedRouteNo.collectAsState()
     val routePolylines by viewModel.routePolylines.collectAsState()
+    val isUpRouteVisible by viewModel.isUpRouteVisible.collectAsState()
+    val isDownRouteVisible by viewModel.isDownRouteVisible.collectAsState()
     
     // Location permission
     val locationPermissionState = rememberPermissionState(
@@ -301,7 +303,15 @@ fun GoogleMapScreen(
             )
         ) {
             // Selected route polyline(s)
-            routePolylines.forEach { routeLine ->
+            routePolylines
+                .filter { routeLine ->
+                    when (routeLine.direction) {
+                        0 -> isUpRouteVisible
+                        1 -> isDownRouteVisible
+                        else -> true
+                    }
+                }
+                .forEach { routeLine ->
                 Polyline(
                     points = routeLine.points,
                     color = if (routeLine.direction == 0) Color(0xFF1E88E5) else Color(0xFFE53935),
@@ -496,7 +506,7 @@ fun GoogleMapScreen(
             },
             onRouteSelected = { routeNo ->
                 viewModel.selectRoute(routeNo)
-                viewModel.setSearchCardExpanded(false)
+                viewModel.setSearchCardExpanded(true)
             },
             onBusStopSelected = { busStop ->
                 viewModel.selectBusStop(busStop)
@@ -518,6 +528,11 @@ fun GoogleMapScreen(
             busStops = busStops,
             routeSuggestions = routeSuggestions,
             routeSearchResults = routeSearchResults,
+            selectedRouteNo = selectedRouteNo,
+            isUpRouteVisible = isUpRouteVisible,
+            isDownRouteVisible = isDownRouteVisible,
+            onUpRouteVisibleChange = { visible -> viewModel.setUpRouteVisible(visible) },
+            onDownRouteVisibleChange = { visible -> viewModel.setDownRouteVisible(visible) },
             selectedBusStop = selectedBusStop,
             isLoadingBusStops = isLoading,
             isRouteSearchLoading = isRouteSearchLoading,

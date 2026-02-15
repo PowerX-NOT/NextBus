@@ -81,6 +81,12 @@ class MapViewModel : ViewModel() {
     private val _isRoutePolylineLoading = MutableStateFlow(false)
     val isRoutePolylineLoading: StateFlow<Boolean> = _isRoutePolylineLoading.asStateFlow()
 
+    private val _isUpRouteVisible = MutableStateFlow(true)
+    val isUpRouteVisible: StateFlow<Boolean> = _isUpRouteVisible.asStateFlow()
+
+    private val _isDownRouteVisible = MutableStateFlow(false)
+    val isDownRouteVisible: StateFlow<Boolean> = _isDownRouteVisible.asStateFlow()
+
     // Last search location to prevent duplicate searches
     private var lastSearchLocation: LatLng? = null
 
@@ -136,6 +142,8 @@ class MapViewModel : ViewModel() {
         }
 
         _selectedRouteNo.value = normalized
+        _isUpRouteVisible.value = true
+        _isDownRouteVisible.value = false
 
         routeSearchJob = viewModelScope.launch {
             try {
@@ -164,6 +172,22 @@ class MapViewModel : ViewModel() {
         _isRouteSearchLoading.value = false
         _routePolylines.value = emptyList()
         _isRoutePolylineLoading.value = false
+        _isUpRouteVisible.value = true
+        _isDownRouteVisible.value = false
+    }
+
+    fun setUpRouteVisible(visible: Boolean) {
+        if (visible) {
+            _isUpRouteVisible.value = true
+            _isDownRouteVisible.value = false
+        }
+    }
+
+    fun setDownRouteVisible(visible: Boolean) {
+        if (visible) {
+            _isDownRouteVisible.value = true
+            _isUpRouteVisible.value = false
+        }
     }
 
     fun fetchStopsForRoute(routeNo: String) {

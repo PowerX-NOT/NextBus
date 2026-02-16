@@ -12,10 +12,13 @@ import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.AnimationVector2D
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.TwoWayConverter
 import androidx.compose.animation.core.tween
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
@@ -384,21 +387,38 @@ fun GoogleMapScreen(
                     )
                 }
 
-                liveVehicles
-                    .filter { v ->
-                        when (v.direction) {
-                            0 -> isUpRouteVisible
-                            1 -> isDownRouteVisible
-                            else -> true
+                val visibleVehicles = remember(liveVehicles, isUpRouteVisible, isDownRouteVisible) {
+                    liveVehicles
+                        .filter { v ->
+                            when (v.direction) {
+                                0 -> isUpRouteVisible
+                                1 -> isDownRouteVisible
+                                else -> true
+                            }
                         }
-                    }
-                    .forEach { v ->
-                        val loc = v.location ?: return@forEach
-                        Marker(
-                            state = MarkerState(position = loc),
+                        .sortedWith(
+                            compareBy(
+                                { it.direction },
+                                { it.vehicleId ?: Int.MAX_VALUE },
+                                { it.vehicleNumber ?: "" },
+                                { it.location?.latitude ?: 0.0 },
+                                { it.location?.longitude ?: 0.0 }
+                            )
+                        )
+                }
+
+                visibleVehicles.forEachIndexed { index, v ->
+                        val loc = v.location ?: return@forEachIndexed
+                        val vehicleKey = v.vehicleId?.let { "id:$it" }
+                            ?: v.vehicleNumber?.let { "no:$it" }
+                            ?: "fallback:${v.direction}:$index"
+
+                        AnimatedLiveVehicleMarker(
+                            key = vehicleKey,
+                            target = loc,
                             title = v.vehicleNumber ?: "Live Bus",
                             snippet = v.eta?.let { "ETA: $it" },
-                            icon = liveBusIcon ?: BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE)
+                            icon = liveBusIcon
                         )
                     }
             }
@@ -734,4 +754,51 @@ private fun easeInCirc(t: Float): Float {
 private fun lerp(a: Float, b: Float, t: Float): Float {
     val x = t.coerceIn(0f, 1f)
     return a + (b - a) * x
+}
+
+private val LatLngVectorConverter: TwoWayConverter<LatLng, AnimationVector2D> = TwoWayConverter(
+    convertToVector = { value -> AnimationVector2D(value.latitude.toFloat(), value.longitude.toFloat()) },
+    convertFromVector = { vector -> LatLng(vector.v1.toDouble(), vector.v2.toDouble()) }
+)
+
+@Composable
+private fun AnimatedLiveVehicleMarker(
+    key: String,
+    target: LatLng,
+    title: String,
+    snippet: String?,
+    icon: BitmapDescriptor?,
+    baseDurationMs: Int = 900
+) {
+    val anim = remember(key) { Animatable(target, LatLngVectorConverter) }
+
+    LaunchedEffect(key, target) {
+        val current = anim.value
+        if (current == target) return@LaunchedEffect
+
+        val d = distanceMeters(current, target)
+        when {
+            // Ignore tiny jitter
+            d < 2f -> return@LaunchedEffect
+
+            // If BMTC suddenly jumps far (bad GPS / different bus), snap to avoid long glides.
+            d > 1500f -> {
+                anim.snapTo(target)
+                return@LaunchedEffect
+            }
+        }
+
+        val duration = (baseDurationMs + (d * 2.0f)).toInt().coerceIn(700, 3500)
+        anim.animateTo(
+            targetValue = target,
+            animationSpec = tween(durationMillis = duration)
+        )
+    }
+
+    Marker(
+        state = MarkerState(position = anim.value),
+        title = title,
+        snippet = snippet,
+        icon = icon ?: BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE)
+    )
 }

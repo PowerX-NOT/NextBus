@@ -201,12 +201,12 @@ class MapViewModel : ViewModel() {
                         },
                         onFailure = { e ->
                             Log.e(TAG, "Error fetching live vehicles: ${e.message}", e)
-                            _liveVehicles.value = emptyList()
+                            // Keep last known vehicles on transient failures to avoid marker jumps.
                         }
                     )
                 } catch (e: Exception) {
                     Log.e(TAG, "Unexpected error fetching live vehicles: ${e.message}", e)
-                    _liveVehicles.value = emptyList()
+                    // Keep last known vehicles on transient failures to avoid marker jumps.
                 } finally {
                     _isLiveVehiclesLoading.value = false
                 }

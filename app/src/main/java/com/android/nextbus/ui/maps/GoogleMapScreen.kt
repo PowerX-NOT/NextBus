@@ -378,9 +378,9 @@ fun GoogleMapScreen(
                 val liveBusIcon = remember {
                     bitmapDescriptorFromDrawablePreserveAspect(
                         context,
-                        R.drawable.bus_live,
-                        maxWidth = 200,
-                        maxHeight = 100
+                        R.drawable.ic_live_bus,
+                        maxWidth = 300,
+                        maxHeight = 150
                     )
                 }
 

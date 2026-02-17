@@ -156,6 +156,26 @@ fun GoogleMapScreen(
     val isUpRouteVisible by viewModel.isUpRouteVisible.collectAsState()
     val isDownRouteVisible by viewModel.isDownRouteVisible.collectAsState()
     val liveVehicles by viewModel.liveVehicles.collectAsState()
+    val isLiveVehiclesLoading by viewModel.isLiveVehiclesLoading.collectAsState()
+
+    val isLivePollingActiveForHeader = remember(selectedRouteNo) {
+        selectedRouteNo != null
+    }
+
+    val liveBusCountForHeader = remember(selectedRouteNo, liveVehicles, isUpRouteVisible, isDownRouteVisible) {
+        if (selectedRouteNo == null) {
+            null
+        } else {
+            liveVehicles.count { v ->
+                val visibleByDirection = when (v.direction) {
+                    0 -> isUpRouteVisible
+                    1 -> isDownRouteVisible
+                    else -> true
+                }
+                visibleByDirection && v.location != null
+            }
+        }
+    }
     
     // Location permission
     val locationPermissionState = rememberPermissionState(
@@ -631,6 +651,8 @@ fun GoogleMapScreen(
             routeSuggestions = routeSuggestions,
             routeSearchResults = routeSearchResults,
             selectedRouteNo = selectedRouteNo,
+            liveBusCount = liveBusCountForHeader,
+            isLiveFetching = isLivePollingActiveForHeader,
             isUpRouteVisible = isUpRouteVisible,
             isDownRouteVisible = isDownRouteVisible,
             onUpRouteVisibleChange = { visible -> viewModel.setUpRouteVisible(visible) },

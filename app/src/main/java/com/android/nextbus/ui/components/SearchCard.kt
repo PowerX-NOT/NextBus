@@ -40,9 +40,11 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.widget.addTextChangedListener
 import com.android.nextbus.BuildConfig
+import com.android.nextbus.R
 import com.android.nextbus.data.model.BusStop
 import com.google.android.libraries.places.api.Places
 import com.google.android.libraries.places.api.model.AutocompleteSessionToken
@@ -76,6 +78,8 @@ fun SearchCard(
     routeSuggestions: List<String> = emptyList(),
     routeSearchResults: List<BusStop> = emptyList(),
     selectedRouteNo: String? = null,
+    liveBusCount: Int? = null,
+    isLiveFetching: Boolean = false,
     isUpRouteVisible: Boolean = true,
     isDownRouteVisible: Boolean = true,
     onUpRouteVisibleChange: (Boolean) -> Unit = {},
@@ -392,20 +396,62 @@ fun SearchCard(
             // Show heading for bus stops or selected bus stop with divider below
             if (busStops.isNotEmpty() || selectedBusStop != null || isShowingRouteStops) {
                 Spacer(modifier = Modifier.height(4.dp))
-                
-                Text(
-                    text = if (selectedBusStop != null) {
-                        selectedBusStop.name
-                    } else if (isShowingRouteStops && selectedRouteNo != null) {
-                        "${selectedRouteNo} (${filteredRouteStops.size})"
-                    } else {
-                        "Nearby Bus Stations (${busStops.size})"
-                    },
-                    style = MaterialTheme.typography.titleLarge,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp)
-                )
+
+                val headerText = if (selectedBusStop != null) {
+                    selectedBusStop.name
+                } else if (isShowingRouteStops && selectedRouteNo != null) {
+                    val countToShow = liveBusCount ?: filteredRouteStops.size
+                    "${selectedRouteNo} (${countToShow})"
+                } else {
+                    "Nearby Bus Stations (${busStops.size})"
+                }
+
+                if (isShowingRouteStops && selectedRouteNo != null) {
+                    val wifiColor = when {
+                        (liveBusCount != null && liveBusCount == 0) -> MaterialTheme.colorScheme.error
+                        isLiveFetching -> Color(0xFF2E7D32)
+                        else -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                    }
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            painter = painterResource(id = R.drawable.ic_live_bus),
+                            contentDescription = null,
+                            tint = Color.Unspecified,
+                            modifier = Modifier.size(28.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = headerText,
+                            fontSize = 18.sp,
+                            style = MaterialTheme.typography.titleLarge,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Icon(
+                            painter = painterResource(id = R.drawable.ic_wifi),
+                            contentDescription = null,
+                            tint = wifiColor,
+                            modifier = Modifier
+                                .offset(y = (-3).dp)
+                                .size(22.dp)
+                        )
+                    }
+                } else {
+                    Text(
+                        text = headerText,
+                        fontSize = 18.sp,
+                        style = MaterialTheme.typography.titleLarge,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp)
+                    )
+                }
                 
                 Spacer(modifier = Modifier.height(8.dp))
                 

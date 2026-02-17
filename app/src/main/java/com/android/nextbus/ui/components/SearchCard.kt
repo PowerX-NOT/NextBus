@@ -621,16 +621,24 @@ fun SearchCard(
                                     modifier = Modifier.weight(1f)
                                 )
 
-                                Switch(
-                                    checked = isDownRouteVisible,
-                                    onCheckedChange = { checked ->
-                                        if (checked) {
-                                            onDownRouteVisibleChange(true)
-                                        } else {
+                                IconButton(
+                                    onClick = {
+                                        if (isDownRouteVisible) {
+                                            onDownRouteVisibleChange(false)
                                             onUpRouteVisibleChange(true)
+                                        } else {
+                                            onUpRouteVisibleChange(false)
+                                            onDownRouteVisibleChange(true)
                                         }
                                     }
-                                )
+                                ) {
+                                    Icon(
+                                        painter = painterResource(id = R.drawable.ic_swap),
+                                        contentDescription = null,
+                                        tint = Color.Unspecified,
+                                        modifier = Modifier.size(32.dp)
+                                    )
+                                }
                             }
 
                             Spacer(modifier = Modifier.height(8.dp))

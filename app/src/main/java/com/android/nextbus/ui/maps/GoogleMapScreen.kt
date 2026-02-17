@@ -239,8 +239,16 @@ fun GoogleMapScreen(
         )
     }
 
-    LaunchedEffect(routePolylines) {
-        val allPoints = routePolylines.flatMap { it.points }
+    LaunchedEffect(routePolylines, isUpRouteVisible, isDownRouteVisible) {
+        val visiblePolylines = routePolylines.filter { polyline ->
+            when (polyline.direction) {
+                0 -> isUpRouteVisible
+                1 -> isDownRouteVisible
+                else -> true
+            }
+        }
+
+        val allPoints = visiblePolylines.flatMap { it.points }
         if (allPoints.size < 2) return@LaunchedEffect
 
         val boundsBuilder = LatLngBounds.builder()

@@ -60,6 +60,9 @@ import com.android.nextbus.R
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.drawable.Drawable
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import androidx.core.content.ContextCompat
 import com.google.android.gms.maps.model.BitmapDescriptor
 
@@ -417,7 +420,7 @@ fun GoogleMapScreen(
                             key = vehicleKey,
                             target = loc,
                             title = v.vehicleNumber ?: "Live Bus",
-                            snippet = v.eta?.let { "ETA: $it" },
+                            snippet = formatLastRefreshSnippet(v.lastRefreshOn),
                             icon = liveBusIcon
                         )
                     }
@@ -754,6 +757,39 @@ private fun easeInCirc(t: Float): Float {
 private fun lerp(a: Float, b: Float, t: Float): Float {
     val x = t.coerceIn(0f, 1f)
     return a + (b - a) * x
+}
+
+private fun formatLastRefreshSnippet(lastRefreshOn: String?): String? {
+    val raw = lastRefreshOn?.trim().orEmpty()
+    if (raw.isEmpty()) return null
+
+    val date = parseBmtcDate(raw) ?: return "Last refreshed: $raw"
+    val outFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+    return "Last refreshed: ${outFormat.format(date)}"
+}
+
+private fun parseBmtcDate(value: String): Date? {
+    val formats = listOf(
+        "yyyy-MM-dd HH:mm:ss",
+        "yyyy-MM-dd HH:mm",
+        "dd-MM-yyyy HH:mm:ss",
+        "dd-MM-yyyy HH:mm",
+        "dd/MM/yyyy HH:mm:ss",
+        "dd/MM/yyyy HH:mm",
+        "yyyy/MM/dd HH:mm:ss",
+        "yyyy/MM/dd HH:mm"
+    )
+
+    for (pattern in formats) {
+        try {
+            val f = SimpleDateFormat(pattern, Locale.getDefault())
+            f.isLenient = true
+            return f.parse(value)
+        } catch (_: Exception) {
+        }
+    }
+
+    return null
 }
 
 private val LatLngVectorConverter: TwoWayConverter<LatLng, AnimationVector2D> = TwoWayConverter(

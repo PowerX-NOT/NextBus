@@ -197,7 +197,19 @@ class MapViewModel : ViewModel() {
                     val result = bmtcRouteService.fetchLiveVehicles(routeNo)
                     result.fold(
                         onSuccess = { vehicles ->
-                            _liveVehicles.value = vehicles
+                            _liveVehicles.value = vehicles.map { v ->
+                                val loc = v.location ?: return@map v
+                                val polylinePoints = _routePolylines.value
+                                    .firstOrNull { it.direction == v.direction }
+                                    ?.points
+                                    ?.takeIf { it.size >= 2 }
+
+                                if (polylinePoints == null) return@map v
+
+                                val snapped = nearestPointOnPolyline(polylinePoints, loc)
+                                val d = calculateDistance(loc, snapped)
+                                if (d <= 200f) v.copy(location = snapped) else v
+                            }
                         },
                         onFailure = { e ->
                             Log.e(TAG, "Error fetching live vehicles: ${e.message}", e)
@@ -211,7 +223,7 @@ class MapViewModel : ViewModel() {
                     _isLiveVehiclesLoading.value = false
                 }
 
-                delay(10_000)
+                delay(1_000)
             }
         }
     }
